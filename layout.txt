@@ -1,0 +1,18 @@
+cell			bytes
+
+HEADER
+filever			4
+numtags			4
+taglist			numtags * 2
+[
+	tagname		4
+	physpos		4
+]
+
+BODY
+tagbody			numtags * (n tagsize)
+[
+	tagname		4
+	tagsize		4
+	tagdata		tagsize
+]

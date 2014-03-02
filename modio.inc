@@ -1,0 +1,433 @@
+/*==============================================================================
+
+
+	Southclaw's Modular Binary IO Library
+
+		Description...
+
+
+==============================================================================*/
+
+
+#if !defined MODIO_FILE_STRUCTURE_VERSION
+	#define MODIO_FILE_STRUCTURE_VERSION (10)
+#endif
+
+#if !defined MAX_MODIO_TAGS
+	#define MAX_MODIO_TAGS (64)
+#endif
+
+#define MAX_MODIO_HEADER_SIZE (MAX_MODIO_TAGS * 2)
+
+#if !defined MAX_MODIO_STACK_SIZE
+	#define MAX_MODIO_STACK_SIZE (4096)
+#endif
+
+#if !defined MAX_MODIO_SESSION
+	#define MAX_MODIO_SESSION (32)
+#endif
+
+#if !defined MODIO_DEBUG
+	#define MODIO_DEBUG (3)
+#endif
+
+#if !defined MAX_FILE_PATH
+	#define MAX_FILE_PATH (128)
+#endif
+
+
+// Quick and dirty debug print
+#define dp:%0(%1) if(modio_debug>=%0)printf(%1)
+
+
+static
+		// Write session data
+		modio_wHeader			[MAX_MODIO_SESSION][MAX_MODIO_HEADER_SIZE],
+		modio_wHeaderIndex		[MAX_MODIO_SESSION],
+		modio_wSessionTags		[MAX_MODIO_SESSION][MAX_MODIO_TAGS],
+		modio_wSessionTagIndex	[MAX_MODIO_SESSION],
+		modio_wStack			[MAX_MODIO_SESSION][MAX_MODIO_STACK_SIZE],
+		modio_wStackIndex		[MAX_MODIO_SESSION],
+		modio_wSessionPath		[MAX_MODIO_SESSION][MAX_FILE_PATH],
+		modio_wActive			[MAX_MODIO_SESSION],
+		modio_wFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
+		modio_wSessions,
+		modio_wLastSession,
+
+		// Read session data
+		modio_rStack			[MAX_MODIO_SESSION][MAX_MODIO_STACK_SIZE],
+		modio_rStackIndex		[MAX_MODIO_SESSION],
+		modio_rSessionPath		[MAX_MODIO_SESSION][MAX_FILE_PATH],
+		modio_rActive			[MAX_MODIO_SESSION],
+		modio_rFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
+		modio_rSessions,
+		modio_rLastSession,
+
+		// Misc
+		modio_debug = MODIO_DEBUG;
+
+
+forward modio_finalise_write(session);
+forward modio_finalise_read(session);
+
+
+/*==============================================================================
+
+	Writing
+
+==============================================================================*/
+
+
+stock modio_push(file[], tag[5 char], length, data[])
+{
+	new session;
+
+	// Check if there are any sessions open
+	if(modio_wSessions > 0)
+	{
+		// Check if this file is already in use
+		session = modio_getsession_write(file);
+
+		// If not, register a new session
+		if(session == -1)
+		{
+			session = modio_register_write(file);
+			dp:1("[MODIO:SESSION:%02d] Registering new write session", session);
+		}
+		else
+		{
+			dp:1("[MODIO:SESSION:%02d] Pushing to existing write session", session);
+		}
+	}
+	else
+	{
+		// If no sessions are open, register a new one
+		session = modio_register_write(file);
+		dp:1("[MODIO:SESSION:%02d] Registering first write session", session);
+	}
+
+	if(modio_wActive[session] == 0)
+	{
+		dp:1("[MODIO:SESSION:%02d] Initializing modio stack push", session);
+		modio_wActive[session] = 1;
+
+		modio_wHeader[session][0] = MODIO_FILE_STRUCTURE_VERSION;
+		modio_wHeader[session][1] = 0;
+		modio_wHeaderIndex[session] = 3;
+	}
+
+	// Ensure the data doesn't violate the stack size
+	if(modio_wStackIndex[session] + length >= MAX_MODIO_STACK_SIZE - 1)
+	{
+		printf("ERROR: Modio stack violation while trying to push %d cells (%d/%d)", length, modio_wStackIndex[session] + length, MAX_MODIO_STACK_SIZE);
+		return 0;
+	}
+
+	// Check if the tag has already been used
+	if(modio_wSessionTagIndex[session] > 0)
+	{
+		for(new i; i < modio_wSessionTagIndex[session]; i++)
+		{
+			if(tag[0] == modio_wSessionTags[session][i])
+			{
+				printf("ERROR: Attempted to overwrite tag: '%c%c%c%c'", tag{0},tag{1},tag{2},tag{3});
+				return -1;
+			}
+		}
+	}
+
+	// Add the tag data to the header
+	modio_wSessionTagIndex[session]++;
+	modio_wHeader[session][2] = modio_wSessionTagIndex[session];
+	modio_wHeader[session][modio_wHeaderIndex[session]++] = tag[0];
+	modio_wHeader[session][modio_wHeaderIndex[session]++] = modio_wHeaderIndex[session] + modio_wStackIndex[session];
+
+	// Concatenate the tag, 4 packed characters into 1 32 bit cell
+	modio_wStack[session][modio_wStackIndex[session]] = tag[0];
+	modio_wStackIndex[session]++;
+
+	// Concatenate the length of the data chunk
+	modio_wStack[session][modio_wStackIndex[session]] = length;
+	modio_wStackIndex[session]++;
+
+	// Concatenate the data chunk
+	new i;
+	while(i < length)
+	{
+		modio_wStack[session][modio_wStackIndex[session]] = data[i];
+		modio_wStackIndex[session]++;
+		i++;
+	}
+
+
+	dp:1("[MODIO:SESSION:%02d] Pushing: %d cells under '%c%c%c%c' session: %d remaining: %d phys: %d tags: %d", session, length, tag{0},tag{1},tag{2},tag{3}, modio_wStackIndex[session], MAX_MODIO_STACK_SIZE - modio_wStackIndex[session], modio_wHeaderIndex[session] + modio_wStackIndex[session], modio_wSessionTagIndex[session]);
+
+	if(modio_wFinaliseTimer[session] == -1)
+	{
+		dp:2("[MODIO:SESSION:%02d] Setting timer", session);
+		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_write", 50, 0, "d", session);
+	}
+
+	return 1;
+}
+
+modio_register_write(file[])
+{
+	modio_wSessionPath[modio_wSessions][0] = EOS;
+	strcat(modio_wSessionPath[modio_wSessions], file);
+
+	return modio_wSessions++;
+}
+
+modio_getsession_write(file[])
+{
+	// Loop through the files, but start with the last used one as that is most
+	// likely to be the required file.
+	new
+		i,
+		session = modio_wLastSession;
+
+	while(i < modio_wSessions)
+	{
+		if(modio_reverse_cmp(file, modio_wSessionPath[session]))
+			return session;
+
+		session++;
+
+		if(session == modio_wSessions)
+			session = 0;
+
+		i++;
+	}
+
+	return -1;
+}
+
+public modio_finalise_write(session)
+{
+	if(session > modio_wSessions)
+		printf("ERROR: Tried to finalise invalid session (%d)", session);
+
+	dp:1("[MODIO:SESSION:%02d] storing: header of size: %d, stack of size %d, tags: %d", session, modio_wHeaderIndex[session], modio_wStackIndex[session], modio_wSessionTagIndex[session]);
+
+	/*
+		Update header to reflect new physical tag positions
+		At the time of tag data being added to the header, the function is
+		completely unaware how many times it will be called afterwards.
+		This results in the physical position becoming offset by the amount of
+		new tags added after the tag.
+	*/
+	modio_wHeader[session][1] = modio_wHeaderIndex[session] + modio_wStackIndex[session];
+
+	for(new i = 0, j = 4; i < modio_wSessionTagIndex[session]; i++, j += 2)
+	{
+		// Add the remainder of the header size on to the physical position
+		modio_wHeader[session][j] += (((modio_wSessionTagIndex[session] - 1) - i) * 2) - 2;
+	}
+
+	// Write the 'stack' array to the file and free it.
+	new File:file = fopen(modio_wSessionPath[session], io_write);
+
+	// Write the header
+	fblockwrite(file, modio_wHeader[session], modio_wHeaderIndex[session]);
+
+	// Write the body
+	fblockwrite(file, modio_wStack[session], modio_wStackIndex[session]);
+
+	fclose(file);
+
+	if(modio_debug == 3)
+	{
+		print("\nHEAD");
+		for(new i; i < modio_wHeaderIndex[session]; i++)
+			printf("[%02d]: %d", i, modio_wHeader[session][i]);
+
+		print("\nBODY");
+		for(new i; i < modio_wStackIndex[session]; i++)
+			printf("[%02d]: %d", i+modio_wHeaderIndex[session], modio_wStack[session][i]);
+	}
+
+	modio_wHeaderIndex[session] = 0;
+	modio_wSessionTagIndex[session] = 0;
+	modio_wStackIndex[session] = 0;
+	modio_wSessionPath[session][0] = EOS;
+	modio_wActive[session] = 0;
+	modio_wFinaliseTimer[session] = -1;
+
+	modio_wSessions--;
+	modio_wLastSession = 0;
+}
+
+
+/*==============================================================================
+
+	Utility
+
+==============================================================================*/
+
+
+modio_read(file[], tag[5 char], data[])
+{
+	if(!fexist(file))
+		return 0;
+
+	new session;
+
+	// Check if there are any sessions open
+	if(modio_rSessions > 0)
+	{
+		// Check if this file is already in use
+		session = modio_getsession_read(file);
+
+		// If not, register a new session
+		if(session == -1)
+		{
+			session = modio_register_read(file);
+			dp:1("[MODIO:SESSION:%02d] Registering new read session", session);
+		}
+		else
+		{
+			dp:1("[MODIO:SESSION:%02d] Pushing to existing read session", session);
+		}
+	}
+	else
+	{
+		// If no sessions are open, register a new one
+		session = modio_register_read(file);
+		dp:1("[MODIO:SESSION:%02d] Registering first read session", session);
+	}
+
+	if(modio_rActive[session] == 0)
+	{
+		dp:1("[MODIO:SESSION:%02d] Initializing modio stack pull", session);
+		modio_rActive[session] = 1;
+
+		new
+			File:f,
+			tmp[2];
+
+		f = fopen(file, io_read);
+		fblockread(f, tmp, 2);
+
+		if(tmp[0] != MODIO_FILE_STRUCTURE_VERSION)
+		{
+			printf("ERROR: File structure version (%d) does not match modio version (%d)", tmp[0], MODIO_FILE_STRUCTURE_VERSION);
+			return 0;
+		}
+
+		modio_rStackIndex[session] = fblockread(f, modio_rStack[session], tmp[1]) + 2;
+
+		if(modio_debug == 3)
+		{
+			printf("[00]: %d", tmp[0]);
+			printf("[01]: %d", tmp[1]);
+
+			print("\nHEAD");
+			for(new i; i < modio_rStackIndex[session]; i++)
+				printf("[%02d]: %d", i, modio_rStack[session][i]);
+		}
+
+		fclose(f);
+
+		dp:1("[MODIO:SESSION:%02d] Extracting '%s': %d tags, size: %d", session, file, modio_rStack[session][0], modio_rStackIndex[session]);
+	}
+
+	// Search for the tag in the header
+	new physpos = -1;
+	for(new i; i < modio_rStack[session][0]; i++)
+	{
+		if(modio_rStack[session][(i * 2) + 1] == tag[0])
+		{
+			physpos = modio_rStack[session][(i * 2) + 2];
+			break;
+		}
+	}
+
+	dp:1("[MODIO:SESSION:%02d] Reading '%c%c%c%c': %d cells from physpos %d", session, tag{0}, tag{1}, tag{2}, tag{3}, modio_rStack[session][physpos + 1], physpos);
+
+	if(physpos == -1)
+	{
+		printf("ERROR: Tag '%c%c%c%c' not found in buffer.", tag{0}, tag{1}, tag{2}, tag{3});
+		return -1;
+	}
+
+	// Extract the data from the physical position
+	for(new i; i < modio_rStack[session][physpos + 1]; i++)
+		data[i] = modio_rStack[session][physpos + 2 + i];
+
+	// Close the session after any other reads
+	if(modio_wFinaliseTimer[session] == -1)
+		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_read", 50, 0, "d", session);
+
+	return 1;
+}
+
+public modio_finalise_read(session)
+{
+	modio_rStackIndex[session] = 0;
+	modio_rSessionPath[session][0] = EOS;
+	modio_rActive[session] = 0;
+	modio_rFinaliseTimer[session] = -1;
+
+	modio_rLastSession = 0;
+	modio_rSessions--;
+}
+
+modio_register_read(file[])
+{
+	modio_rSessionPath[modio_rSessions][0] = EOS;
+	strcat(modio_rSessionPath[modio_rSessions], file);
+
+	return modio_rSessions++;
+}
+
+modio_getsession_read(file[])
+{
+	// Loop through the files, but start with the last used one as that is most
+	// likely to be the required file.
+	new
+		i,
+		session = modio_rLastSession;
+
+	while(i < modio_rSessions)
+	{
+		if(modio_reverse_cmp(file, modio_rSessionPath[session]))
+			return session;
+
+		session++;
+
+		if(session == modio_rSessions)
+			session = 0;
+
+		i++;
+	}
+
+	return -1;
+}
+
+
+/*==============================================================================
+
+	Utility
+
+==============================================================================*/
+
+
+modio_reverse_cmp(str1[], str2[])
+{
+	new
+		len1 = strlen(str1),
+		len2 = strlen(str2);
+
+	if(len1 != len2)
+		return 0;
+
+	for(new i = len1 - 1; i >= 0; i--)
+	{
+		if(str1[i] != str2[i])
+			return 0;
+	}
+
+	return 1;
+}
+
