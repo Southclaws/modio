@@ -9,6 +9,9 @@
 ==============================================================================*/
 
 
+#include <YSI\y_hooks>
+
+
 #if !defined MODIO_FILE_STRUCTURE_VERSION
 	#define MODIO_FILE_STRUCTURE_VERSION (10)
 #endif
@@ -28,7 +31,7 @@
 #endif
 
 #if !defined MODIO_DEBUG
-	#define MODIO_DEBUG (3)
+	#define MODIO_DEBUG (0)
 #endif
 
 #if !defined MAX_FILE_PATH
@@ -53,6 +56,7 @@ static
 		modio_wFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
 		modio_wSessions,
 		modio_wLastSession,
+bool:	modio_wScriptExiting,
 
 		// Read session data
 		modio_rStack			[MAX_MODIO_SESSION][MAX_MODIO_STACK_SIZE],
@@ -78,7 +82,7 @@ forward modio_finalise_read(session);
 ==============================================================================*/
 
 
-stock modio_push(file[], tag[5 char], length, data[])
+stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 {
 	new session;
 
@@ -159,8 +163,13 @@ stock modio_push(file[], tag[5 char], length, data[])
 		i++;
 	}
 
-
 	dp:1("[MODIO:SESSION:%02d] Pushing: %d cells under '%c%c%c%c' session: %d remaining: %d phys: %d tags: %d", session, length, tag{0},tag{1},tag{2},tag{3}, modio_wStackIndex[session], MAX_MODIO_STACK_SIZE - modio_wStackIndex[session], modio_wHeaderIndex[session] + modio_wStackIndex[session], modio_wSessionTagIndex[session]);
+
+	if(forcewrite || modio_wScriptExiting)
+	{
+		modio_finalise_write(session);
+		return 1;
+	}
 
 	if(modio_wFinaliseTimer[session] == -1)
 	{
@@ -171,7 +180,7 @@ stock modio_push(file[], tag[5 char], length, data[])
 	return 1;
 }
 
-modio_register_write(file[])
+stock modio_register_write(file[])
 {
 	modio_wSessionPath[modio_wSessions][0] = EOS;
 	strcat(modio_wSessionPath[modio_wSessions], file);
@@ -179,7 +188,7 @@ modio_register_write(file[])
 	return modio_wSessions++;
 }
 
-modio_getsession_write(file[])
+stock modio_getsession_write(file[])
 {
 	// Loop through the files, but start with the last used one as that is most
 	// likely to be the required file.
@@ -202,6 +211,72 @@ modio_getsession_write(file[])
 
 	return -1;
 }
+
+#if defined FILTERSCRIPT
+
+	hook OnFilterScriptExit()
+	{
+		dp:1("[MODIO:HOOK] OnFilterScriptExit");
+
+		modio_wScriptExiting = true;
+
+		return 1;
+	}
+/*
+	public OnFilterScriptExit()
+	{
+		dp:1("[MODIO:HOOK] OnFilterScriptExit");
+
+		#if defined modio_OnFilterScriptExit
+			return modio_OnFilterScriptExit();
+		#else
+			return 1;
+		#endif
+	}
+	#if defined _ALS_OnFilterScriptExit
+		#undef OnFilterScriptExit
+	#else
+		#define _ALS_OnFilterScriptExit
+	#endif
+	 
+	#define OnFilterScriptExit modio_OnFilterScriptExit
+	#if defined modio_OnFilterScriptExit
+		forward modio_OnFilterScriptExit();
+	#endif
+*/
+#else
+
+	hook OnGameModeExit()
+	{
+		dp:1("[MODIO:HOOK] OnGameModeExit");
+
+		modio_wScriptExiting = true;
+
+		return 1;
+	}
+/*
+	public OnGameModeExit()
+	{
+		dp:1("[MODIO:HOOK] OnGameModeExit");
+
+		#if defined modio_OnGameModeExit
+			return modio_OnGameModeExit();
+		#else
+			return 1;
+		#endif
+	}
+	#if defined _ALS_OnGameModeExit
+		#undef OnGameModeExit
+	#else
+		#define _ALS_OnGameModeExit
+	#endif
+	 
+	#define OnGameModeExit modio_OnGameModeExit
+	#if defined modio_OnGameModeExit
+		forward modio_OnGameModeExit();
+	#endif
+*/
+#endif
 
 public modio_finalise_write(session)
 {
@@ -227,6 +302,12 @@ public modio_finalise_write(session)
 
 	// Write the 'stack' array to the file and free it.
 	new File:file = fopen(modio_wSessionPath[session], io_write);
+
+	if(!file)
+	{
+		printf("ERROR: Opening of '%s' failed.", modio_wSessionPath[session]);
+		return;
+	}
 
 	// Write the header
 	fblockwrite(file, modio_wHeader[session], modio_wHeaderIndex[session]);
@@ -266,7 +347,7 @@ public modio_finalise_write(session)
 ==============================================================================*/
 
 
-modio_read(file[], tag[5 char], data[])
+stock modio_read(file[], tag[5 char], data[])
 {
 	if(!fexist(file))
 		return 0;
@@ -373,7 +454,7 @@ public modio_finalise_read(session)
 	modio_rSessions--;
 }
 
-modio_register_read(file[])
+stock modio_register_read(file[])
 {
 	modio_rSessionPath[modio_rSessions][0] = EOS;
 	strcat(modio_rSessionPath[modio_rSessions], file);
@@ -381,7 +462,7 @@ modio_register_read(file[])
 	return modio_rSessions++;
 }
 
-modio_getsession_read(file[])
+stock modio_getsession_read(file[])
 {
 	// Loop through the files, but start with the last used one as that is most
 	// likely to be the required file.
@@ -413,7 +494,7 @@ modio_getsession_read(file[])
 ==============================================================================*/
 
 
-modio_reverse_cmp(str1[], str2[])
+stock modio_reverse_cmp(str1[], str2[])
 {
 	new
 		len1 = strlen(str1),
@@ -431,3 +512,4 @@ modio_reverse_cmp(str1[], str2[])
 	return 1;
 }
 
+#undef dp
