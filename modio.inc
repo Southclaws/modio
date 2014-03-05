@@ -128,10 +128,12 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 	}
 
 	// Check if the tag has already been used
+	dp:4("[MODIO:SESSION:%02d] modio_wSessionTagIndex: %d", session, modio_wSessionTagIndex[session]);
 	if(modio_wSessionTagIndex[session] > 0)
 	{
 		for(new i; i < modio_wSessionTagIndex[session]; i++)
 		{
+			dp:5("[MODIO:SESSION:%02d] Loop (%d/%d) comparing tags: %d == %d", session, i, modio_wSessionTagIndex[session], tag[0], modio_wSessionTags[session][i]);
 			if(tag[0] == modio_wSessionTags[session][i])
 			{
 				printf("ERROR: Attempted to overwrite tag: '%c%c%c%c'", tag{0},tag{1},tag{2},tag{3});
@@ -141,7 +143,7 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 	}
 
 	// Add the tag data to the header
-	modio_wSessionTagIndex[session]++;
+	modio_wSessionTags[session][modio_wSessionTagIndex[session]++] = tag[0];
 	modio_wHeader[session][2] = modio_wSessionTagIndex[session];
 	modio_wHeader[session][modio_wHeaderIndex[session]++] = tag[0];
 	modio_wHeader[session][modio_wHeaderIndex[session]++] = modio_wHeaderIndex[session] + modio_wStackIndex[session];
@@ -167,6 +169,7 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 
 	if(forcewrite || modio_wScriptExiting)
 	{
+		dp:2("[MODIO:SESSION:%02d] Forcing write (forcewrite: %d modio_wScriptExiting: %d)", session, forcewrite, modio_wScriptExiting);
 		modio_finalise_write(session);
 		return 1;
 	}
@@ -280,7 +283,7 @@ stock modio_getsession_write(file[])
 
 public modio_finalise_write(session)
 {
-	if(session > modio_wSessions)
+	if(!(0 <= session < modio_wSessions))
 		printf("ERROR: Tried to finalise invalid session (%d)", session);
 
 	dp:1("[MODIO:SESSION:%02d] storing: header of size: %d, stack of size %d, tags: %d", session, modio_wHeaderIndex[session], modio_wStackIndex[session], modio_wSessionTagIndex[session]);
@@ -328,6 +331,14 @@ public modio_finalise_write(session)
 			printf("[%02d]: %d", i+modio_wHeaderIndex[session], modio_wStack[session][i]);
 	}
 
+	modio_close_session_write(session);
+}
+
+stock modio_close_session_write(session)
+{
+	if(!(0 <= session < modio_wSessions))
+		return 0;
+
 	modio_wHeaderIndex[session] = 0;
 	modio_wSessionTagIndex[session] = 0;
 	modio_wStackIndex[session] = 0;
@@ -337,6 +348,8 @@ public modio_finalise_write(session)
 
 	modio_wSessions--;
 	modio_wLastSession = 0;
+
+	return 1;
 }
 
 
