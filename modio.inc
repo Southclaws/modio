@@ -201,7 +201,7 @@ stock modio_getsession_write(file[])
 
 	while(i < modio_wSessions)
 	{
-		if(modio_reverse_cmp(file, modio_wSessionPath[session]))
+		if(strcmp(file, modio_wSessionPath[session]))
 			return session;
 
 		session++;
@@ -485,7 +485,7 @@ stock modio_getsession_read(file[])
 
 	while(i < modio_rSessions)
 	{
-		if(modio_reverse_cmp(file, modio_rSessionPath[session]))
+		if(strcmp(file, modio_rSessionPath[session]))
 			return session;
 
 		session++;
@@ -506,7 +506,7 @@ stock modio_getsession_read(file[])
 
 ==============================================================================*/
 
-
+/*
 stock modio_reverse_cmp(str1[], str2[])
 {
 	new
@@ -524,5 +524,5 @@ stock modio_reverse_cmp(str1[], str2[])
 
 	return 1;
 }
-
+*/
 #undef dp
