@@ -39,7 +39,7 @@
 #endif
 
 
-// Quick and dirty debug print
+// Quick and dirty debug print. Levels range from 0 to 5
 #define dp:%0(%1) if(modio_debug>=%0)printf(%1)
 
 
@@ -85,6 +85,8 @@ forward modio_finalise_read(session);
 stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 {
 	new session;
+
+	dp:1("[MODIO:PUSH] Pushing to file '%s'.", file);
 
 	// Check if there are any sessions open
 	if(modio_wSessions > 0)
@@ -201,7 +203,7 @@ stock modio_getsession_write(file[])
 
 	while(i < modio_wSessions)
 	{
-		if(strcmp(file, modio_wSessionPath[session]))
+		if(!strcmp(file, modio_wSessionPath[session]))
 			return session;
 
 		session++;
@@ -339,6 +341,8 @@ stock modio_close_session_write(session)
 	if(!(0 <= session < modio_wSessions))
 		return 0;
 
+	KillTimer(modio_wFinaliseTimer[session]);
+
 	modio_wHeaderIndex[session] = 0;
 	modio_wSessionTagIndex[session] = 0;
 	modio_wStackIndex[session] = 0;
@@ -366,6 +370,8 @@ stock modio_read(file[], tag[5 char], data[])
 		return 0;
 
 	new session;
+
+	dp:1("[MODIO:READ] Reading file '%s'.", file);
 
 	// Check if there are any sessions open
 	if(modio_rSessions > 0)
@@ -453,11 +459,14 @@ stock modio_read(file[], tag[5 char], data[])
 	if(modio_wFinaliseTimer[session] == -1)
 		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_read", 50, 0, "d", session);
 
-	return 1;
+	// Return the amount of cells read
+	return modio_rStack[session][physpos + 1];
 }
 
 public modio_finalise_read(session)
 {
+	KillTimer(modio_rFinaliseTimer[session]);
+
 	modio_rStackIndex[session] = 0;
 	modio_rSessionPath[session][0] = EOS;
 	modio_rActive[session] = 0;
@@ -485,7 +494,7 @@ stock modio_getsession_read(file[])
 
 	while(i < modio_rSessions)
 	{
-		if(strcmp(file, modio_rSessionPath[session]))
+		if(!strcmp(file, modio_rSessionPath[session]))
 			return session;
 
 		session++;
