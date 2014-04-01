@@ -132,7 +132,7 @@ I'll go through each section and explain it:
   - tagname
     The 4 character tag name
   - physpos
-    The physical position of the actual data block (offset from first header cell)
+    The physical position of the actual data block (offset from first body cell. First tag always has a physpos of 0)
 
 
 ### Body
