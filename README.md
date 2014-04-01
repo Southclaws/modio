@@ -91,11 +91,13 @@ Each piece of data is tagged with a 4 character (32 bit) cell so sections of dat
 The data is stored in a partially non-order-dependent structure since the hook order is usually indeterminate anyway so the tags are used to search for data.
 
 This is what a modio file looks like:
+(Actual files are binary, this just represents the structure.)
 ```
 cell            bytes
 
 HEADER
 filever         4
+numbyte         4
 numtags         4
 taglist         numtags * 2
 [
@@ -118,6 +120,9 @@ I'll go through each section and explain it:
 
 - filever (1 cell)
   A single number which identifies which version of modio is required to read the file.
+
+- numbyte (1 cell)
+  The size of the header and body in cells (4 bytes per cell).
 
 - numtags (1 cell)
   The number of tags/data sections in the file.
@@ -145,8 +150,6 @@ I'll go through each section and explain it:
 
 This is still in very early development and can be improved upon a lot.
 There is a demo gamemode available in my repository that examples this and some SIF features in a modular structure.
-
-- modio: [https://github.com/Southclaw/modio ![http://i.imgur.com/l7gBY92.png](http://i.imgur.com/l7gBY92.png)](https://github.com/Southclaw/modio)
 
 - modgm: [https://github.com/Southclaw/modgm-demo ![http://i.imgur.com/l7gBY92.png](http://i.imgur.com/l7gBY92.png)](https://github.com/Southclaw/modgm-demo)
 
