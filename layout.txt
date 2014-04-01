@@ -2,6 +2,7 @@ cell			bytes
 
 HEADER
 filever			4
+numbyte			4
 numtags			4
 taglist			numtags * 2
 [

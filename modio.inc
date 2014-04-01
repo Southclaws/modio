@@ -71,7 +71,7 @@ bool:	modio_wScriptExiting,
 		modio_debug = MODIO_DEBUG;
 
 
-forward modio_finalise_write(session);
+forward modio_finalise_write(session, close_session);
 forward modio_finalise_read(session);
 
 
@@ -144,11 +144,8 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 		}
 	}
 
-	// Add the tag data to the header
+	// Add the tag data to the tag list
 	modio_wSessionTags[session][modio_wSessionTagIndex[session]++] = tag[0];
-	modio_wHeader[session][2] = modio_wSessionTagIndex[session];
-	modio_wHeader[session][modio_wHeaderIndex[session]++] = tag[0];
-	modio_wHeader[session][modio_wHeaderIndex[session]++] = modio_wHeaderIndex[session] + modio_wStackIndex[session];
 
 	// Concatenate the tag, 4 packed characters into 1 32 bit cell
 	modio_wStack[session][modio_wStackIndex[session]] = tag[0];
@@ -172,14 +169,14 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 	if(forcewrite || modio_wScriptExiting)
 	{
 		dp:2("[MODIO:SESSION:%02d] Forcing write (forcewrite: %d modio_wScriptExiting: %d)", session, forcewrite, modio_wScriptExiting);
-		modio_finalise_write(session);
+		modio_finalise_write(session, false);
 		return 1;
 	}
 
 	if(modio_wFinaliseTimer[session] == -1)
 	{
 		dp:2("[MODIO:SESSION:%02d] Setting timer", session);
-		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_write", 50, 0, "d", session);
+		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_write", 50, 0, "dd", session, true);
 	}
 
 	return 1;
@@ -283,27 +280,57 @@ stock modio_getsession_write(file[])
 */
 #endif
 
-public modio_finalise_write(session)
+public modio_finalise_write(session, close_session)
 {
 	if(!(0 <= session < modio_wSessions))
 		printf("ERROR: Tried to finalise invalid session (%d)", session);
 
+	// First tag physpos not offset from the start of the body.
+	modio_wHeader[session][3] = modio_wSessionTags[session][0];
+	modio_wHeader[session][4] = 0;
+	modio_wHeaderIndex[session] = 5;
+
+	dp:5("[MODIO:SESSION:%02d] Header tag 0: %d", session, modio_wHeader[session][4]);
+
+	// i = tag index, j = tag physpos, k = data physpos
+	// This loop starts on tag 1 at physpos 5 since the first tag is set above.
+	for(new i = 1, j = 5; i < modio_wSessionTagIndex[session]; i++, j += 2)
+	{
+		// This cell contains the tag
+		modio_wHeader[session][j] = modio_wSessionTags[session][i];
+
+		// The next cell contains the tag's data's offset from the top of the
+		// body of the file (the first tag is always at position 0)
+		// I've never indented code like this but it makes it easier to comment!
+		modio_wHeader[session][j + 1] =
+			// This position is offset from the position of the previous tag
+			// We start by getting that position from the previous cell
+			modio_wHeader[session][j - 1] +
+			// Then the size of that block needs to be added
+			// The size of a block is stored right after the tag in the body.
+			modio_wStack[session][
+				// We use the previous cell again to get the position of the
+				// block in the file
+				modio_wHeader[session][j - 1] +
+				// Then add 1 because the size of the block is in the next cell
+				1
+			] +
+			// Then add 2 since the size of the block is only the size of the
+			// data IN the block, the extra 2 cells contain the tag and the
+			// block size.
+			2;
+
+		// Advance the header index by 2 (one for the tag and one for the pos)
+		modio_wHeaderIndex[session] += 2;
+
+		dp:5("[MODIO:SESSION:%02d] Header tag %d: %d offset: %d", session, i, modio_wHeader[session][j], modio_wStack[session][ modio_wHeader[session][j - 3] + 1 ]);
+	}
+
 	dp:1("[MODIO:SESSION:%02d] storing: header of size: %d, stack of size %d, tags: %d", session, modio_wHeaderIndex[session], modio_wStackIndex[session], modio_wSessionTagIndex[session]);
 
-	/*
-		Update header to reflect new physical tag positions
-		At the time of tag data being added to the header, the function is
-		completely unaware how many times it will be called afterwards.
-		This results in the physical position becoming offset by the amount of
-		new tags added after the tag.
-	*/
+	// Assign sizes; done afterwards so wHeaderIndex is the correct value.
 	modio_wHeader[session][1] = modio_wHeaderIndex[session] + modio_wStackIndex[session];
-
-	for(new i = 0, j = 4; i < modio_wSessionTagIndex[session]; i++, j += 2)
-	{
-		// Add the remainder of the header size on to the physical position
-		modio_wHeader[session][j] += (((modio_wSessionTagIndex[session] - 1) - i) * 2) - 2;
-	}
+	modio_wHeader[session][2] = modio_wSessionTagIndex[session];
 
 	// Write the 'stack' array to the file and free it.
 	new File:file = fopen(modio_wSessionPath[session], io_write);
@@ -322,7 +349,7 @@ public modio_finalise_write(session)
 
 	fclose(file);
 
-	if(modio_debug == 3)
+	if(modio_debug >= 4)
 	{
 		print("\nHEAD");
 		for(new i; i < modio_wHeaderIndex[session]; i++)
@@ -330,10 +357,11 @@ public modio_finalise_write(session)
 
 		print("\nBODY");
 		for(new i; i < modio_wStackIndex[session]; i++)
-			printf("[%02d]: %d", i+modio_wHeaderIndex[session], modio_wStack[session][i]);
+			printf("[%02d] [%02d]: %d", i+modio_wHeaderIndex[session], i, modio_wStack[session][i]);
 	}
 
-	modio_close_session_write(session);
+	if(close_session)
+		modio_close_session_write(session);
 }
 
 stock modio_close_session_write(session)
@@ -359,7 +387,7 @@ stock modio_close_session_write(session)
 
 /*==============================================================================
 
-	Utility
+	Reading
 
 ==============================================================================*/
 
@@ -417,7 +445,7 @@ stock modio_read(file[], tag[5 char], data[])
 
 		modio_rStackIndex[session] = fblockread(f, modio_rStack[session], tmp[1]) + 2;
 
-		if(modio_debug == 3)
+		if(modio_debug >= 4)
 		{
 			printf("[00]: %d", tmp[0]);
 			printf("[01]: %d", tmp[1]);
@@ -436,9 +464,12 @@ stock modio_read(file[], tag[5 char], data[])
 	new physpos = -1;
 	for(new i; i < modio_rStack[session][0]; i++)
 	{
+		dp:5("[MODIO:SESSION:%02d] Loop (%d/%d) comparing tags: %d == %d", session, i, modio_rStack[session][0], tag[0], modio_rStack[session][(i * 2) + 1]);
+
 		if(modio_rStack[session][(i * 2) + 1] == tag[0])
 		{
-			physpos = modio_rStack[session][(i * 2) + 2];
+			physpos = modio_rStack[session][(i * 2) + 2] + (modio_rStack[session][0] * 2) + 1;
+			dp:5("[MODIO:SESSION:%02d] Found tag, headersize: %d, physpos: %d", session, (modio_rStack[session][0] * 2) + 1, physpos);
 			break;
 		}
 	}
@@ -448,7 +479,7 @@ stock modio_read(file[], tag[5 char], data[])
 	if(physpos == -1)
 	{
 		printf("ERROR: Tag '%c%c%c%c' not found in buffer.", tag{0}, tag{1}, tag{2}, tag{3});
-		return -1;
+		return 0;
 	}
 
 	// Extract the data from the physical position
@@ -456,8 +487,8 @@ stock modio_read(file[], tag[5 char], data[])
 		data[i] = modio_rStack[session][physpos + 2 + i];
 
 	// Close the session after any other reads
-	if(modio_wFinaliseTimer[session] == -1)
-		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_read", 50, 0, "d", session);
+	if(modio_rFinaliseTimer[session] == -1)
+		modio_rFinaliseTimer[session] = SetTimerEx("modio_finalise_read", 50, 0, "d", session);
 
 	// Return the amount of cells read
 	return modio_rStack[session][physpos + 1];
@@ -508,30 +539,4 @@ stock modio_getsession_read(file[])
 	return -1;
 }
 
-
-/*==============================================================================
-
-	Utility
-
-==============================================================================*/
-
-/*
-stock modio_reverse_cmp(str1[], str2[])
-{
-	new
-		len1 = strlen(str1),
-		len2 = strlen(str2);
-
-	if(len1 != len2)
-		return 0;
-
-	for(new i = len1 - 1; i >= 0; i--)
-	{
-		if(str1[i] != str2[i])
-			return 0;
-	}
-
-	return 1;
-}
-*/
 #undef dp
