@@ -5,6 +5,8 @@
 
 		Description...
 
+	Implement this: https://github.com/Y-Less/YSI-Includes/blob/YSI.tl/YSI_Storage/y_amx.inc#L1079
+	or #define TO_4_CHAR(%0,%1,%2,%3) (((%0) & 0xFF << 24) | ((%1) & 0xFF << 16) | ((%2) & 0xFF << 8) | ((%3) & 0xFF))
 
 ==============================================================================*/
 
@@ -282,8 +284,11 @@ stock modio_getsession_write(file[])
 
 public modio_finalise_write(session, close_session)
 {
-	if(!(0 <= session < modio_wSessions))
+	if(!(0 <= session < MAX_MODIO_SESSION))
+	{
 		printf("ERROR: Tried to finalise invalid session (%d)", session);
+		return;
+	}
 
 	// First tag physpos not offset from the start of the body.
 	modio_wHeader[session][3] = modio_wSessionTags[session][0];
@@ -351,13 +356,11 @@ public modio_finalise_write(session, close_session)
 
 	if(modio_debug >= 4)
 	{
-		print("\nHEAD");
 		for(new i; i < modio_wHeaderIndex[session]; i++)
-			printf("[%02d]: %d", i, modio_wHeader[session][i]);
+			printf("[MODIO:SESSION:%02d] HEAD: [%02d]: %d", session, i, modio_wHeader[session][i]);
 
-		print("\nBODY");
 		for(new i; i < modio_wStackIndex[session]; i++)
-			printf("[%02d] [%02d]: %d", i+modio_wHeaderIndex[session], i, modio_wStack[session][i]);
+			printf("[MODIO:SESSION:%02d] BODY: [%02d] [%02d]: %d", session, i+modio_wHeaderIndex[session], i, modio_wStack[session][i]);
 	}
 
 	if(close_session)
@@ -366,8 +369,13 @@ public modio_finalise_write(session, close_session)
 
 stock modio_close_session_write(session)
 {
-	if(!(0 <= session < modio_wSessions))
+	dp:1("[MODIO:SESSION:%02d] Closing session", session);
+
+	if(!(0 <= session < MAX_MODIO_SESSION))
+	{
+		print("ERROR: Tried to close invalid session.");
 		return 0;
+	}
 
 	KillTimer(modio_wFinaliseTimer[session]);
 
@@ -447,12 +455,11 @@ stock modio_read(file[], tag[5 char], data[])
 
 		if(modio_debug >= 4)
 		{
-			printf("[00]: %d", tmp[0]);
-			printf("[01]: %d", tmp[1]);
+			printf("[MODIO:SESSION:%02d] READ [00]: %d", session, tmp[0]);
+			printf("[MODIO:SESSION:%02d] READ [01]: %d", session, tmp[1]);
 
-			print("\nHEAD");
 			for(new i; i < modio_rStackIndex[session]; i++)
-				printf("[%02d]: %d", i, modio_rStack[session][i]);
+				printf("[MODIO:SESSION:%02d] READ [%02d]: %d", session, i, modio_rStack[session][i]);
 		}
 
 		fclose(f);
