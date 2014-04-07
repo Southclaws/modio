@@ -84,7 +84,7 @@ forward modio_finalise_read(session);
 ==============================================================================*/
 
 
-stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
+stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forceclose = true)
 {
 	new session;
 
@@ -171,14 +171,14 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false)
 	if(forcewrite || modio_wScriptExiting)
 	{
 		dp:2("[MODIO:SESSION:%02d] Forcing write (forcewrite: %d modio_wScriptExiting: %d)", session, forcewrite, modio_wScriptExiting);
-		modio_finalise_write(session, false);
+		modio_finalise_write(session, forceclose);
 		return 1;
 	}
 
 	if(modio_wFinaliseTimer[session] == -1)
 	{
 		dp:2("[MODIO:SESSION:%02d] Setting timer", session);
-		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_write", 50, 0, "dd", session, true);
+		modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_write", 50, 0, "dd", session, forceclose);
 	}
 
 	return 1;
@@ -400,7 +400,7 @@ stock modio_close_session_write(session)
 ==============================================================================*/
 
 
-stock modio_read(file[], tag[5 char], data[])
+stock modio_read(file[], tag[5 char], data[], forceclose = false)
 {
 	if(!fexist(file))
 		return 0;
@@ -423,7 +423,7 @@ stock modio_read(file[], tag[5 char], data[])
 		}
 		else
 		{
-			dp:1("[MODIO:SESSION:%02d] Pushing to existing read session", session);
+			dp:1("[MODIO:SESSION:%02d] Using existing read session", session);
 		}
 	}
 	else
@@ -490,8 +490,16 @@ stock modio_read(file[], tag[5 char], data[])
 	}
 
 	// Extract the data from the physical position
+	// Could use memcpy here but it needs a speed test
 	for(new i; i < modio_rStack[session][physpos + 1]; i++)
 		data[i] = modio_rStack[session][physpos + 2 + i];
+
+	if(forceclose)
+	{
+		dp:2("[MODIO:SESSION:%02d] Force-closing read session.", session);
+		modio_finalise_read(session);
+		return modio_rStack[session][physpos + 1];
+	}
 
 	// Close the session after any other reads
 	if(modio_rFinaliseTimer[session] == -1)
