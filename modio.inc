@@ -57,6 +57,7 @@ static
 		modio_wActive			[MAX_MODIO_SESSION],
 		modio_wFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
 		modio_wSessions,
+		modio_wSessionHighest,
 		modio_wLastSession,
 bool:	modio_wScriptExiting,
 
@@ -67,6 +68,7 @@ bool:	modio_wScriptExiting,
 		modio_rActive			[MAX_MODIO_SESSION],
 		modio_rFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
 		modio_rSessions,
+		modio_rSessionHighest,
 		modio_rLastSession,
 
 		// Misc
@@ -100,23 +102,23 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forcec
 		if(session == -1)
 		{
 			session = modio_register_write(file);
-			dp:1("[MODIO:SESSION:%02d] Registering new write session", session);
+			dp:2("[MODIO:SESSION:%02d] Registering new write session", session);
 		}
 		else
 		{
-			dp:1("[MODIO:SESSION:%02d] Pushing to existing write session", session);
+			dp:2("[MODIO:SESSION:%02d] Pushing to existing write session", session);
 		}
 	}
 	else
 	{
 		// If no sessions are open, register a new one
 		session = modio_register_write(file);
-		dp:1("[MODIO:SESSION:%02d] Registering first write session", session);
+		dp:2("[MODIO:SESSION:%02d] Registering first write session", session);
 	}
 
 	if(modio_wActive[session] == 0)
 	{
-		dp:1("[MODIO:SESSION:%02d] Initializing modio stack push", session);
+		dp:2("[MODIO:SESSION:%02d] Initializing modio stack push", session);
 		modio_wActive[session] = 1;
 
 		modio_wHeader[session][0] = MODIO_FILE_STRUCTURE_VERSION;
@@ -189,6 +191,9 @@ stock modio_register_write(file[])
 	modio_wSessionPath[modio_wSessions][0] = EOS;
 	strcat(modio_wSessionPath[modio_wSessions], file);
 
+	if(modio_wSessions > modio_wSessionHighest)
+		modio_wSessionHighest = modio_wSessions;
+
 	return modio_wSessions++;
 }
 
@@ -202,12 +207,18 @@ stock modio_getsession_write(file[])
 
 	while(i < modio_wSessions)
 	{
-		if(!strcmp(file, modio_wSessionPath[session]))
-			return session;
+		if(modio_wActive[session])
+		{
+			if(!strcmp(file, modio_wSessionPath[session]))
+			{
+				dp:4("[MODIO:GETSESSION:WRITE] Compared '%s' with '%s' returning session %d", file, modio_wSessionPath[session], session);
+				return session;
+			}
+		}
 
 		session++;
 
-		if(session == modio_wSessions)
+		if(session == modio_wSessionHighest)
 			session = 0;
 
 		i++;
@@ -284,6 +295,8 @@ stock modio_getsession_write(file[])
 
 public modio_finalise_write(session, close_session)
 {
+	dp:1("[MODIO:SESSION:%02d] Finalising write session for '%s'.", session, modio_wSessionPath[session]);
+
 	if(!(0 <= session < MAX_MODIO_SESSION))
 	{
 		printf("ERROR: Tried to finalise invalid session (%d)", session);
@@ -369,7 +382,7 @@ public modio_finalise_write(session, close_session)
 
 stock modio_close_session_write(session)
 {
-	dp:1("[MODIO:SESSION:%02d] Closing session", session);
+	dp:1("[MODIO:SESSION:%02d] Closing write session for '%s'.", session, modio_wSessionPath[session]);
 
 	if(!(0 <= session < MAX_MODIO_SESSION))
 	{
@@ -387,7 +400,19 @@ stock modio_close_session_write(session)
 	modio_wFinaliseTimer[session] = -1;
 
 	modio_wSessions--;
+
+	if(session == modio_wSessionHighest)
+	{
+		while(modio_wSessionHighest > 0 && !modio_wActive[modio_wSessionHighest])
+			modio_wSessionHighest--;
+
+		dp:2("[MODIO:SESSION:%02d] New highest write session ID: %d", modio_wSessionHighest);
+	}
+
 	modio_wLastSession = 0;
+
+	if(modio_wSessions < 0)
+		modio_wSessions = 0;
 
 	return 1;
 }
@@ -419,23 +444,23 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false)
 		if(session == -1)
 		{
 			session = modio_register_read(file);
-			dp:1("[MODIO:SESSION:%02d] Registering new read session", session);
+			dp:2("[MODIO:SESSION:%02d] Registering new read session", session);
 		}
 		else
 		{
-			dp:1("[MODIO:SESSION:%02d] Using existing read session", session);
+			dp:2("[MODIO:SESSION:%02d] Using existing read session", session);
 		}
 	}
 	else
 	{
 		// If no sessions are open, register a new one
 		session = modio_register_read(file);
-		dp:1("[MODIO:SESSION:%02d] Registering first read session", session);
+		dp:2("[MODIO:SESSION:%02d] Registering first read session", session);
 	}
 
 	if(modio_rActive[session] == 0)
 	{
-		dp:1("[MODIO:SESSION:%02d] Initializing modio stack pull", session);
+		dp:2("[MODIO:SESSION:%02d] Initializing modio stack pull", session);
 		modio_rActive[session] = 1;
 
 		new
@@ -464,7 +489,7 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false)
 
 		fclose(f);
 
-		dp:1("[MODIO:SESSION:%02d] Extracting '%s': %d tags, size: %d", session, file, modio_rStack[session][0], modio_rStackIndex[session]);
+		dp:2("[MODIO:SESSION:%02d] Extracting '%s': %d tags, size: %d", session, file, modio_rStack[session][0], modio_rStackIndex[session]);
 	}
 
 	// Search for the tag in the header
@@ -511,6 +536,7 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false)
 
 public modio_finalise_read(session)
 {
+	dp:1("[MODIO:SESSION:%02d] Finalising read session for '%s'.", session, modio_rSessionPath[session]);
 	KillTimer(modio_rFinaliseTimer[session]);
 
 	modio_rStackIndex[session] = 0;
@@ -519,13 +545,27 @@ public modio_finalise_read(session)
 	modio_rFinaliseTimer[session] = -1;
 
 	modio_rLastSession = 0;
+
+	if(session == modio_rSessionHighest)
+	{
+		while(modio_rSessionHighest > 0 && !modio_rActive[modio_rSessionHighest])
+			modio_rSessionHighest--;
+
+		dp:2("[MODIO:SESSION:%02d] New highest read session ID: %d", modio_rSessionHighest);
+	}
+
 	modio_rSessions--;
 }
 
 stock modio_register_read(file[])
 {
+	dp:1("[MODIO:SESSION:%02d] Registering new session.", modio_rSessions);
+
 	modio_rSessionPath[modio_rSessions][0] = EOS;
 	strcat(modio_rSessionPath[modio_rSessions], file);
+
+	if(modio_rSessions > modio_rSessionHighest)
+		modio_rSessionHighest = modio_rSessions;
 
 	return modio_rSessions++;
 }
@@ -540,12 +580,18 @@ stock modio_getsession_read(file[])
 
 	while(i < modio_rSessions)
 	{
-		if(!strcmp(file, modio_rSessionPath[session]))
-			return session;
+		if(modio_rActive[session])
+		{
+			if(!strcmp(file, modio_rSessionPath[session]))
+			{
+				dp:4("[MODIO:GETSESSION:READ] Compared '%s' with '%s' returning session %d", file, modio_rSessionPath[session], session);
+				return session;
+			}
+		}
 
 		session++;
 
-		if(session == modio_rSessions)
+		if(session == modio_wSessionHighest)
 			session = 0;
 
 		i++;
