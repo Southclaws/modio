@@ -177,10 +177,17 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forcec
 
 	dp:1("[MODIO:SESSION:%02d] Pushing: %d cells under '%c%c%c%c' session: %d remaining: %d phys: %d tags: %d", session, length, tag{0},tag{1},tag{2},tag{3}, modio_wStackIndex[session], MAX_MODIO_STACK_SIZE - modio_wStackIndex[session], modio_wHeaderIndex[session] + modio_wStackIndex[session], modio_wSessionTagIndex[session]);
 
-	if(forcewrite || modio_wScriptExiting)
+	if(forcewrite)
 	{
-		dp:2("[MODIO:SESSION:%02d] Forcing write (forcewrite: %d modio_wScriptExiting: %d)", session, forcewrite, modio_wScriptExiting);
-		modio_finalise_write(session, modio_wScriptExiting ? 0 : forceclose);
+		dp:2("[MODIO:SESSION:%02d] Forcing write (forcewrite)", session);
+		modio_finalise_write(session, forceclose);
+		return 1;
+	}
+
+	if(modio_wScriptExiting)
+	{
+		dp:2("[MODIO:SESSION:%02d] Forcing write (modio_wScriptExiting)", session);
+		modio_finalise_write(session, 0);
 		return 1;
 	}
 
