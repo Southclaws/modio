@@ -19,10 +19,10 @@ hook OnPlayerConnect(playerid)
 {
     new
         name[MAX_PLAYER_NAME],
-        filename[32];
+        filename[35];
 
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
-    format(filename, 32, "users/%s.dat", name);
+    format(filename, 35, "users/%s.dat", name);
 
     modio_read(filename, !"MOD1", mod1_Data[playerid]);
 
@@ -33,10 +33,10 @@ hook OnPlayerDisconnect(playerid, reason)
 {
     new
         name[MAX_PLAYER_NAME],
-        filename[32];
+        filename[35];
 
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
-    format(filename, 32, "users/%s.dat", name);
+    format(filename, 35, "users/%s.dat", name);
 
     modio_push(filename, !"MOD1", 10, mod1_Data[playerid]);
 
@@ -54,10 +54,10 @@ hook OnPlayerConnect(playerid)
 {
     new
         name[MAX_PLAYER_NAME],
-        filename[32];
+        filename[35];
 
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
-    format(filename, 32, "users/%s.dat", name);
+    format(filename, 35, "users/%s.dat", name);
 
     modio_read(filename, !"MOD2", mod1_Data[playerid]);
 
@@ -68,10 +68,10 @@ hook OnPlayerDisconnect(playerid, reason)
 {
     new
         name[MAX_PLAYER_NAME],
-        filename[32];
+        filename[35];
 
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
-    format(filename, 32, "users/%s.dat", name);
+    format(filename, 35, "users/%s.dat", name);
 
     modio_push(filename, !"MOD2", 64, mod1_Data[playerid]);
 
