@@ -61,8 +61,9 @@ static
 		modio_wActive			[MAX_MODIO_SESSION],
 		modio_wFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
 		modio_wSessions,
+		modio_wSessionLowest,
 		modio_wSessionHighest,
-		modio_wLastSession,
+		modio_wLastSession = -1,
 bool:	modio_wScriptExiting,
 
 		// Read session data
@@ -72,6 +73,7 @@ bool:	modio_wScriptExiting,
 		modio_rActive			[MAX_MODIO_SESSION],
 		modio_rFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
 		modio_rSessions,
+		modio_rSessionLowest,
 		modio_rSessionHighest,
 		modio_rLastSession,
 
@@ -122,6 +124,8 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forcec
 
 	if(session == -1)
 		return 0;
+
+	modio_wLastSession = session;
 
 	if(modio_wActive[session] == 0)
 	{
@@ -211,20 +215,30 @@ stock modio_register_write(file[])
 		return -1;
 	}
 
-	new session;
+	new session = -1;
 
 	// Clumsy way of finding the next inactive session
-	for(new i; i <= modio_wSessionHighest; i++)
+	for(new i; i <= modio_wSessionHighest + 1; i++)
 	{
+		dp:5("[MODIO:REGISTER:WRITE] Searching for next inactive session. Current: %d highest: %d", i, modio_wSessionHighest);
 		if(!modio_wActive[i])
+		{
 			session = i;
+			break;
+		}
 	}
+
+	if(session == -1)
+		return -1;
 
 	modio_wSessionPath[session][0] = EOS;
 	strcat(modio_wSessionPath[session], file);
 
 	if(session > modio_wSessionHighest)
 		modio_wSessionHighest = session;
+
+	else if(session < modio_wSessionLowest)
+		modio_wSessionLowest = session;
 
 	modio_wSessions++;
 
@@ -233,29 +247,32 @@ stock modio_register_write(file[])
 
 stock modio_getsession_write(file[])
 {
+	dp:2("[MODIO:GETSESSION:WRITE] Getting session ID for '%s'.", file);
+
 	// Loop through the files, but start with the last used one as that is most
 	// likely to be the required file.
 	new
 		i,
-		session = modio_wLastSession;
+		session = modio_wLastSession == -1 ? modio_wSessionLowest : modio_wLastSession;
 
 	while(i < modio_wSessions)
 	{
+		dp:5("[MODIO:GETSESSION:WRITE] Comparing '%s' with '%s' (session: %d)", file, modio_wSessionPath[session], session);
 		if(modio_wActive[session])
 		{
 			if(!strcmp(file, modio_wSessionPath[session]))
 			{
-				dp:5("[MODIO:GETSESSION:WRITE] Compared '%s' with '%s' returning session %d", file, modio_wSessionPath[session], session);
+				dp:4("[MODIO:GETSESSION:WRITE] Compared '%s' with '%s' returning session %d", file, modio_wSessionPath[session], session);
 				return session;
 			}
+
+			i++;
 		}
 
 		session++;
 
 		if(session > modio_wSessionHighest)
 			session = 0;
-
-		i++;
 	}
 
 	return -1;
@@ -441,13 +458,20 @@ stock modio_close_session_write(session)
 
 	if(session == modio_wSessionHighest)
 	{
-		while(modio_wSessionHighest > 0 && !modio_wActive[modio_wSessionHighest])
+		while(modio_wSessionHighest > modio_wSessionLowest && !modio_wActive[modio_wSessionHighest])
 			modio_wSessionHighest--;
 
 		dp:2("[MODIO:SESSION:%02d] New highest write session ID: %d", session, modio_wSessionHighest);
 	}
+	else if(session == modio_wSessionLowest)
+	{
+		while(modio_wSessionLowest < modio_wSessionHighest && !modio_wActive[modio_wSessionLowest])
+			modio_wSessionLowest++;
 
-	modio_wLastSession = 0;
+		dp:2("[MODIO:SESSION:%02d] New lowest write session ID: %d", session, modio_wSessionLowest);
+	}
+
+	modio_wLastSession = -1;
 
 	if(modio_wSessions < 0)
 		modio_wSessions = 0;
@@ -495,6 +519,11 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = tr
 		session = modio_register_read(file);
 		dp:2("[MODIO:SESSION:%02d] Registering first read session", session);
 	}
+
+	if(session == -1)
+		return 0;
+
+	modio_rLastSession = session;
 
 	if(modio_rActive[session] == 0)
 	{
@@ -571,10 +600,8 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = tr
 	{
 		dp:2("[MODIO:SESSION:%02d] Force-closing read session.", session);
 		modio_finalise_read(session);
-		return modio_rStack[session][physpos + 1];
 	}
-
-	if(autoclose)
+	else if(autoclose)
 	{
 		// Close the session after any other reads
 		if(modio_rFinaliseTimer[session] == -1)
@@ -604,6 +631,13 @@ public modio_finalise_read(session)
 
 		dp:2("[MODIO:SESSION:%02d] New highest read session ID: %d", modio_rSessionHighest);
 	}
+	else if(session == modio_rSessionLowest)
+	{
+		while(modio_rSessionLowest < modio_rSessionHighest && !modio_rActive[modio_rSessionLowest])
+			modio_rSessionLowest++;
+
+		dp:2("[MODIO:SESSION:%02d] New lowest read session ID: %d", session, modio_rSessionLowest);
+	}
 
 	modio_rSessions--;
 }
@@ -612,13 +646,40 @@ stock modio_register_read(file[])
 {
 	dp:1("[MODIO:SESSION:%02d] Registering new session.", modio_rSessions);
 
-	modio_rSessionPath[modio_rSessions][0] = EOS;
-	strcat(modio_rSessionPath[modio_rSessions], file);
+	if(modio_rSessions == MAX_MODIO_SESSION)
+	{
+		printf("ERROR: modio_rSessions has reached limit of %d, please increase MAX_MODIO_SESSION.", MAX_MODIO_SESSION);
+		return -1;
+	}
 
-	if(modio_rSessions > modio_rSessionHighest)
-		modio_rSessionHighest = modio_rSessions;
+	new session = -1;
 
-	return modio_rSessions++;
+	// Clumsy way of finding the next inactive session
+	for(new i; i <= modio_rSessionHighest + 1; i++)
+	{
+		dp:5("[MODIO:REGISTER:READ] Searching for next inactive session. Current: %d highest: %d", i, modio_rSessionHighest);
+		if(!modio_rActive[i])
+		{
+			session = i;
+			break;
+		}
+	}
+
+	if(session == -1)
+		return -1;
+
+	modio_rSessionPath[session][0] = EOS;
+	strcat(modio_rSessionPath[session], file);
+
+	if(session > modio_rSessionHighest)
+		modio_rSessionHighest = session;
+
+	else if(session < modio_rSessionLowest)
+		modio_rSessionLowest = session;
+
+	modio_rSessions++;
+
+	return session;
 }
 
 stock modio_getsession_read(file[])
@@ -642,7 +703,7 @@ stock modio_getsession_read(file[])
 
 		session++;
 
-		if(session == modio_wSessionHighest)
+		if(session == modio_rSessionHighest)
 			session = 0;
 
 		i++;
