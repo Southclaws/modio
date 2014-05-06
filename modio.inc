@@ -81,8 +81,8 @@ bool:	modio_wScriptExiting,
 		modio_debug = MODIO_DEBUG;
 
 
-forward modio_finalise_write(session, close_session);
-forward modio_finalise_read(session);
+forward __modio_finalise_write(session, close_session);
+forward __modio_finalise_read(session);
 
 
 /*==============================================================================
@@ -200,7 +200,7 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forcec
 		if(modio_wFinaliseTimer[session] == -1)
 		{
 			dp:2("[MODIO:SESSION:%02d] Setting timer", session);
-			modio_wFinaliseTimer[session] = SetTimerEx("modio_finalise_write", 50, 0, "dd", session, forceclose);
+			modio_wFinaliseTimer[session] = SetTimerEx("__modio_finalise_write", 50, 0, "dd", session, forceclose);
 		}
 	}
 
@@ -348,7 +348,12 @@ stock modio_getsession_write(file[])
 
 #endif
 
-public modio_finalise_write(session, close_session)
+public __modio_finalise_write(session, close_session)
+{
+	modio_finalise_write(session, close_session);
+}
+
+modio_finalise_write(session, close_session = 1)
 {
 	dp:1("[MODIO:SESSION:%02d] Finalising write session for '%s'.", session, modio_wSessionPath[session]);
 
@@ -594,6 +599,7 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = tr
 	else
 	{
 		printf("ERROR: Tag '%c%c%c%c' not found in buffer.", tag{0}, tag{1}, tag{2}, tag{3});
+		return 0;
 	}
 
 	if(forceclose)
@@ -605,14 +611,19 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = tr
 	{
 		// Close the session after any other reads
 		if(modio_rFinaliseTimer[session] == -1)
-			modio_rFinaliseTimer[session] = SetTimerEx("modio_finalise_read", 50, 0, "d", session);
+			modio_rFinaliseTimer[session] = SetTimerEx("__modio_finalise_read", 50, 0, "d", session);
 	}
 
 	// Return the amount of cells read
 	return modio_rStack[session][physpos + 1];
 }
 
-public modio_finalise_read(session)
+public __modio_finalise_read(session)
+{
+	modio_finalise_read(session);
+}
+
+modio_finalise_read(session)
 {
 	dp:1("[MODIO:SESSION:%02d] Finalising read session for '%s'.", session, modio_rSessionPath[session]);
 	KillTimer(modio_rFinaliseTimer[session]);
