@@ -5,8 +5,6 @@
 
 		Description...
 
-	Implement this: https://github.com/Y-Less/YSI-Includes/blob/YSI.tl/YSI_Storage/y_amx.inc#L1079
-	or #define TO_4_CHAR(%0,%1,%2,%3) (((%0) & 0xFF << 24) | ((%1) & 0xFF << 16) | ((%2) & 0xFF << 8) | ((%3) & 0xFF))
 
 ==============================================================================*/
 
@@ -43,6 +41,12 @@
 #if !defined MODIO_SCRIPT_EXIT_FIX
 	#define MODIO_SCRIPT_EXIT_FIX (1)
 #endif
+
+
+// Usage: _T<X,X,X,X> where X is any ASCII character.
+// Just shifts the bytes together into a nice 32 bit cell.
+// To be used for the tag parameter so you can name tags.
+#define _T<%0,%1,%2,%3> (('%0'<<24)|('%1'<<16)|('%2'<<8)|('%3'))
 
 
 // Quick and dirty debug print. Levels range from 0 to 5
@@ -92,7 +96,7 @@ forward __modio_finalise_read(session);
 ==============================================================================*/
 
 
-stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forceclose = true, autowrite = true)
+stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = true, autowrite = true)
 {
 	new session;
 
@@ -150,20 +154,20 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forcec
 	{
 		for(new i; i < modio_wSessionTagIndex[session]; i++)
 		{
-			dp:5("[MODIO:SESSION:%02d] Loop (%d/%d) comparing tags: %d == %d", session, i, modio_wSessionTagIndex[session], tag[0], modio_wSessionTags[session][i]);
-			if(tag[0] == modio_wSessionTags[session][i])
+			dp:5("[MODIO:SESSION:%02d] Loop (%d/%d) comparing tags: %d == %d", session, i, modio_wSessionTagIndex[session], tag, modio_wSessionTags[session][i]);
+			if(tag == modio_wSessionTags[session][i])
 			{
-				printf("ERROR: Attempted to overwrite tag: '%c%c%c%c' in file '%s' for session %d", tag{0},tag{1},tag{2},tag{3}, file, session);
+				printf("ERROR: Attempted to overwrite tag: '%d' in file '%s' for session %d", tag, file, session);
 				return -1;
 			}
 		}
 	}
 
 	// Add the tag data to the tag list
-	modio_wSessionTags[session][modio_wSessionTagIndex[session]++] = tag[0];
+	modio_wSessionTags[session][modio_wSessionTagIndex[session]++] = tag;
 
 	// Concatenate the tag, 4 packed characters into 1 32 bit cell
-	modio_wStack[session][modio_wStackIndex[session]] = tag[0];
+	modio_wStack[session][modio_wStackIndex[session]] = tag;
 	modio_wStackIndex[session]++;
 
 	// Concatenate the length of the data chunk
@@ -179,7 +183,7 @@ stock modio_push(file[], tag[5 char], length, data[], forcewrite = false, forcec
 		i++;
 	}
 
-	dp:1("[MODIO:SESSION:%02d] Pushing: %d cells under '%c%c%c%c' session: %d remaining: %d phys: %d tags: %d", session, length, tag{0},tag{1},tag{2},tag{3}, modio_wStackIndex[session], MAX_MODIO_STACK_SIZE - modio_wStackIndex[session], modio_wHeaderIndex[session] + modio_wStackIndex[session], modio_wSessionTagIndex[session]);
+	dp:1("[MODIO:SESSION:%02d] Pushing: %d cells under '%d' session: %d remaining: %d phys: %d tags: %d", session, length, tag, modio_wStackIndex[session], MAX_MODIO_STACK_SIZE - modio_wStackIndex[session], modio_wHeaderIndex[session] + modio_wStackIndex[session], modio_wSessionTagIndex[session]);
 
 	if(forcewrite)
 	{
@@ -492,7 +496,7 @@ stock modio_close_session_write(session)
 ==============================================================================*/
 
 
-stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = true)
+stock modio_read(file[], tag, data[], forceclose = false, autoclose = true)
 {
 	if(!fexist(file))
 		return 0;
@@ -577,9 +581,9 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = tr
 	new physpos = -1;
 	for(new i; i < modio_rStack[session][0]; i++)
 	{
-		dp:5("[MODIO:SESSION:%02d] Loop (%d/%d) comparing tags: %d == %d", session, i, modio_rStack[session][0], tag[0], modio_rStack[session][(i * 2) + 1]);
+		dp:5("[MODIO:SESSION:%02d] Loop (%d/%d) comparing tags: %d == %d", session, i, modio_rStack[session][0], tag, modio_rStack[session][(i * 2) + 1]);
 
-		if(modio_rStack[session][(i * 2) + 1] == tag[0])
+		if(modio_rStack[session][(i * 2) + 1] == tag)
 		{
 			physpos = modio_rStack[session][(i * 2) + 2] + (modio_rStack[session][0] * 2) + 1;
 			dp:5("[MODIO:SESSION:%02d] Found tag, headersize: %d, physpos: %d", session, (modio_rStack[session][0] * 2) + 1, physpos);
@@ -587,7 +591,7 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = tr
 		}
 	}
 
-	dp:1("[MODIO:SESSION:%02d] Reading '%c%c%c%c': %d cells from physpos %d", session, tag{0}, tag{1}, tag{2}, tag{3}, modio_rStack[session][physpos + 1], physpos);
+	dp:1("[MODIO:SESSION:%02d] Reading '%d': %d cells from physpos %d", session, tag, modio_rStack[session][physpos + 1], physpos);
 
 	if(physpos > -1)
 	{
@@ -598,7 +602,7 @@ stock modio_read(file[], tag[5 char], data[], forceclose = false, autoclose = tr
 	}
 	else
 	{
-		printf("ERROR: Tag '%c%c%c%c' not found in buffer.", tag{0}, tag{1}, tag{2}, tag{3});
+		printf("ERROR: Tag '%d' not found in buffer.", tag);
 		return 0;
 	}
 
