@@ -24,7 +24,7 @@ hook OnPlayerConnect(playerid)
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
     format(filename, 35, "users/%s.dat", name);
 
-    modio_read(filename, !"MOD1", mod1_Data[playerid]);
+    modio_read(filename, _T<M,O,D,1>, mod1_Data[playerid]);
 
     return 1;
 }
@@ -38,7 +38,7 @@ hook OnPlayerDisconnect(playerid, reason)
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
     format(filename, 35, "users/%s.dat", name);
 
-    modio_push(filename, !"MOD1", 10, mod1_Data[playerid]);
+    modio_push(filename, _T<M,O,D,1>, 10, mod1_Data[playerid]);
 
     return 1;
 }
@@ -59,7 +59,7 @@ hook OnPlayerConnect(playerid)
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
     format(filename, 35, "users/%s.dat", name);
 
-    modio_read(filename, !"MOD2", mod1_Data[playerid]);
+    modio_read(filename, _T<M,O,D,2>, mod1_Data[playerid]);
 
     return 1;
 }
@@ -73,7 +73,7 @@ hook OnPlayerDisconnect(playerid, reason)
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
     format(filename, 35, "users/%s.dat", name);
 
-    modio_push(filename, !"MOD2", 64, mod1_Data[playerid]);
+    modio_push(filename, _T<M,O,D,2>, 64, mod1_Data[playerid]);
 
     return 1;
 }
@@ -86,7 +86,7 @@ The process is exactly the same for reading, one simple function call in each ho
 
 # How it works
 
-Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named (that's what the !"MOD1" and !"MOD2" things were. The ! makes the string packed so it all fits into one cell)
+Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named (that's what the _T<M,O,D,1> and _T<M,O,D,2> things were. The weird syntax packs the characters into a single cell.)
 
 The data is stored in a partially non-order-dependent structure since the hook order is usually indeterminate anyway so the tags are used to search for data.
 
@@ -127,11 +127,11 @@ I'll go through each section and explain it:
 - numtags (1 cell)
   The number of tags/data sections in the file.
 
-- taglist (numtags * 2)
+- taglist (numtags * 2 cells)
   A list of tags in the file; each item in this list has two elements:
-  - tagname
+  - tagname (1 cell)
     The 4 character tag name
-  - physpos
+  - physpos (1 cell)
     The physical position of the actual data block (offset from first body cell. First tag always has a physpos of 0)
 
 
