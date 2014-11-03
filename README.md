@@ -86,7 +86,7 @@ The process is exactly the same for reading, one simple function call in each ho
 
 # How it works
 
-Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named (that's what the _T<M,O,D,1> and _T<M,O,D,2> things were. The weird syntax packs the characters into a single cell.)
+Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named (that's what the _T&lt;M,O,D,1&ht; and _T&lt;M,O,D,2&gt; things were. The weird syntax packs the characters into a single cell.)
 
 The data is stored in a partially non-order-dependent structure since the hook order is usually indeterminate anyway so the tags are used to search for data.
 
