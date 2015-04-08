@@ -24,7 +24,7 @@ hook OnPlayerConnect(playerid)
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
     format(filename, 35, "users/%s.dat", name);
 
-    modio_read(filename, _T<M,O,D,1>, mod1_Data[playerid]);
+    modio_read(filename, _T<M,O,D,1>, 10, mod1_Data[playerid]);
 
     return 1;
 }
@@ -59,7 +59,7 @@ hook OnPlayerConnect(playerid)
     GetPlayerName(playerid, name, MAX_PLAYER_NAME);
     format(filename, 35, "users/%s.dat", name);
 
-    modio_read(filename, _T<M,O,D,2>, mod1_Data[playerid]);
+    modio_read(filename, _T<M,O,D,2>, 64, mod1_Data[playerid]);
 
     return 1;
 }
@@ -86,7 +86,7 @@ The process is exactly the same for reading, one simple function call in each ho
 
 # How it works
 
-Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named (that's what the _T&lt;M,O,D,1&ht; and _T&lt;M,O,D,2&gt; things were. The weird syntax packs the characters into a single cell.)
+Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named (that's what the _T&lt;M,O,D,1&gt; and _T&lt;M,O,D,2&gt; things were. The weird syntax packs the characters into a single cell.)
 
 The data is stored in a partially non-order-dependent structure since the hook order is usually indeterminate anyway so the tags are used to search for data.
 
@@ -99,7 +99,7 @@ HEADER
 filever         4
 numbyte         4
 numtags         4
-taglist         numtags * 2
+taglist         numtags * 8
 [
     tagname     4
     physpos     4
@@ -110,7 +110,7 @@ tagbody         numtags * (n tagsize)
 [
     tagname     4
     tagsize     4
-    tagdata     tagsize
+    tagdata     tagsize * 4
 ]
 
 ```
