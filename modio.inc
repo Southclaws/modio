@@ -42,6 +42,10 @@
 	#define MODIO_SCRIPT_EXIT_FIX (1)
 #endif
 
+#if !defined MODIO_WARN_ON_NO_TAG
+	#define MODIO_WARN_ON_NO_TAG (0)
+#endif
+
 
 // Usage: _T<X,X,X,X> where X is any ASCII character.
 // Just shifts the bytes together into a nice 32 bit cell.
@@ -496,7 +500,7 @@ stock modio_close_session_write(session)
 ==============================================================================*/
 
 
-stock modio_read(file[], tag, data[], forceclose = false, autoclose = true)
+stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = true)
 {
 	if(!fexist(file))
 		return 0;
@@ -595,6 +599,12 @@ stock modio_read(file[], tag, data[], forceclose = false, autoclose = true)
 
 	if(physpos > -1)
 	{
+		if(modio_rStack[session][physpos + 1] > length)
+		{
+			printf("ERROR: Output data size (%d) exceeds destination array size (%d).", modio_rStack[session][physpos + 1], length);
+			return 0;
+		}
+
 		// Extract the data from the physical position
 		// Could use memcpy here but it needs a speed test
 		for(new i; i < modio_rStack[session][physpos + 1]; i++)
@@ -602,7 +612,16 @@ stock modio_read(file[], tag, data[], forceclose = false, autoclose = true)
 	}
 	else
 	{
-		printf("ERROR: Tag '%d' not found in buffer.", tag);
+		#if MODIO_WARN_ON_NO_TAG == 1
+			printf("ERROR: Tag '%d' not found in buffer.", tag);
+		#endif
+
+		if(forceclose)
+		{
+			dp:2("[MODIO:SESSION:%02d] Force-closing read session.", session);
+			modio_finalise_read(session);
+		}
+
 		return 0;
 	}
 
