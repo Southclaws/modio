@@ -57,6 +57,19 @@
 #define dp:%0(%1) if(modio_debug>=%0)printf(%1)
 
 
+enum (+= -1)
+{
+	MODIO_ERR_BADSESSION = -1,
+	MODIO_ERR_STKOVR,
+	MODIO_ERR_TAGUSED,
+	MODIO_ERR_NOFILE,
+	MODIO_ERR_IOERROR,
+	MODIO_ERR_BADSTRUCT,
+	MODIO_ERR_OVERFLOW,
+	MODIO_ERR_NOTAG
+}
+
+
 static
 		// Write session data
 		modio_wHeader			[MAX_MODIO_SESSION][MAX_MODIO_HEADER_SIZE],
@@ -131,7 +144,7 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 	}
 
 	if(session == -1)
-		return 0;
+		return MODIO_ERR_BADSESSION;
 
 	modio_wLastSession = session;
 
@@ -149,7 +162,7 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 	if(modio_wStackIndex[session] + length >= MAX_MODIO_STACK_SIZE - 1)
 	{
 		printf("ERROR: Modio stack violation while trying to push %d cells (%d/%d)", length, modio_wStackIndex[session] + length, MAX_MODIO_STACK_SIZE);
-		return 0;
+		return MODIO_ERR_STKOVR;
 	}
 
 	// Check if the tag has already been used
@@ -162,7 +175,7 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 			if(tag == modio_wSessionTags[session][i])
 			{
 				printf("ERROR: Attempted to overwrite tag: '%d' in file '%s' for session %d", tag, file, session);
-				return -1;
+				return MODIO_ERR_TAGUSED;
 			}
 		}
 	}
@@ -368,7 +381,7 @@ modio_finalise_write(session, close_session = 1)
 	if(!(0 <= session < MAX_MODIO_SESSION))
 	{
 		printf("ERROR: Tried to finalise invalid session (%d)", session);
-		return;
+		return MODIO_ERR_BADSESSION;
 	}
 
 	// First tag physpos not offset from the start of the body.
@@ -424,7 +437,7 @@ modio_finalise_write(session, close_session = 1)
 	if(!file)
 	{
 		printf("ERROR: Opening of '%s' failed.", modio_wSessionPath[session]);
-		return;
+		return MODIO_ERR_IOERROR;
 	}
 
 	// Write the header
@@ -446,6 +459,8 @@ modio_finalise_write(session, close_session = 1)
 
 	if(close_session)
 		modio_close_session_write(session);
+
+	return 1;
 }
 
 stock modio_close_session_write(session)
@@ -455,7 +470,7 @@ stock modio_close_session_write(session)
 	if(!(0 <= session < MAX_MODIO_SESSION))
 	{
 		print("ERROR: Tried to close invalid session.");
-		return 0;
+		return MODIO_ERR_BADSESSION;
 	}
 
 	KillTimer(modio_wFinaliseTimer[session]);
@@ -503,7 +518,7 @@ stock modio_close_session_write(session)
 stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = true)
 {
 	if(!fexist(file))
-		return 0;
+		return MODIO_ERR_NOFILE;
 
 	new session;
 
@@ -534,7 +549,7 @@ stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = tr
 	}
 
 	if(session == -1)
-		return 0;
+		return MODIO_ERR_BADSESSION;
 
 	modio_rLastSession = session;
 
@@ -552,7 +567,7 @@ stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = tr
 		if(!f)
 		{
 			printf("ERROR: Opening of '%s' failed.", file);
-			return 0;
+			return MODIO_ERR_IOERROR;
 		}
 
 		fblockread(f, tmp, 2);
@@ -562,7 +577,7 @@ stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = tr
 			printf("ERROR: File structure version (%d) does not match modio version (%d)", tmp[0], MODIO_FILE_STRUCTURE_VERSION);
 			fclose(f);
 			modio_finalise_read(session);
-			return 0;
+			return MODIO_ERR_BADSTRUCT;
 		}
 
 		modio_rStackIndex[session] = fblockread(f, modio_rStack[session], tmp[1]) + 2;
@@ -602,7 +617,7 @@ stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = tr
 		if(modio_rStack[session][physpos + 1] > length)
 		{
 			printf("ERROR: Output data size (%d) exceeds destination array size (%d).", modio_rStack[session][physpos + 1], length);
-			return 0;
+			return MODIO_ERR_OVERFLOW;
 		}
 
 		// Extract the data from the physical position
@@ -622,7 +637,7 @@ stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = tr
 			modio_finalise_read(session);
 		}
 
-		return 0;
+		return MODIO_ERR_NOTAG;
 	}
 
 	if(forceclose)
@@ -648,6 +663,12 @@ public __modio_finalise_read(session)
 
 modio_finalise_read(session)
 {
+	if(!(0 <= session < MAX_MODIO_SESSION))
+	{
+		printf("ERROR: Tried to close invalid session (%d)", session);
+		return;
+	}
+
 	dp:1("[MODIO:SESSION:%02d] Finalising read session for '%s'.", session, modio_rSessionPath[session]);
 	KillTimer(modio_rFinaliseTimer[session]);
 
@@ -718,6 +739,8 @@ stock modio_register_read(file[])
 
 stock modio_getsession_read(file[])
 {
+	dp:1("[MODIO:GETSESSION:READ] Finding session ID for '%s'.", file);
+
 	// Loop through the files, but start with the last used one as that is most
 	// likely to be the required file.
 	new
