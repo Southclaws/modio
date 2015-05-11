@@ -2,10 +2,16 @@
 
 "modio" (modular IO) is a file reader/writer library for SA:MP that takes advantage of fblockread and fblockwrite.
 
-I won't go into the advantages of binary files too much here. They are a nice alternative to SQL which can sometimes be overkill that offer a nice speed and flexibility advantage over plaintext parsers such as INI or JSON.
+How many numbers are on a clock?
 
-This library is designed for modular gamemodes. Gamemodes that have a lot of different parts that must save to a single file. I wrote it with y_hooks/ALS in mind; for example storing some data to a file simply by calling the modio write function in an OnPlayerDisconnect hook.
-<!--more-->
+![http://i.imgur.com/8NH3Vsg.png](http://i.imgur.com/8NH3Vsg.png)
+
+A plaintext format such as INI or JSON would answer: 15
+A binary file format such as modio would answer 12
+
+Hopefully that analogy hooked your interest in this library!
+
+This library is designed for modular gamemodes. Gamemodes that have a lot of different parts that must save to a single file. I wrote it with y_hooks/ALS in mind. For example: calling the modio write function to save player data in 10 OnPlayerDisconnect hooks will all save to the file using a single write operation, pretty cool huh?
 
 # Example of Use
 
@@ -79,7 +85,7 @@ hook OnPlayerDisconnect(playerid, reason)
 }
 ```
 
-Here we can see two different scripts hooking OnPlayerDisconnect each pushing some data related to the player that is unique and specific to that script. The file is only opened and written to once because modio is clever, it knows when the last push is called.
+Here we can see two different scripts hooking OnPlayerConnect and OnPlayerDisconnect each pushing some data related to the player that is unique and specific to that script. The file is only opened and written to once because modio is clever, it knows when the last push is called.
 
 The process is exactly the same for reading, one simple function call in each hook.
 

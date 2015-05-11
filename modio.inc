@@ -3,7 +3,13 @@
 
 	Southclaw's Modular Binary IO Library
 
-		Description...
+		v1.0.0
+
+		"modio" (modular IO) is a file reader/writer library for SA:MP that
+		takes advantage of fblockread and fblockwrite. Designed for modular
+		gamemodes with easy of writing in mind. A single function is required
+		to read and write to a single file from multiple scripts. All file
+		operations are performed once per file not once per function call.
 
 
 ==============================================================================*/
