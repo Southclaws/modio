@@ -629,7 +629,23 @@ stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = tr
 		// Extract the data from the physical position
 		// Could use memcpy here but it needs a speed test
 		for(new i; i < modio_rStack[session][physpos + 1]; i++)
+		{
+			if(physpos + 2 + i >= MAX_MODIO_STACK_SIZE)
+			{
+				printf("ERROR: Output data size (%d) exceeds MAX_MODIO_STACK_SIZE (%d).", i, MAX_MODIO_STACK_SIZE);
+				return MODIO_ERR_OVERFLOW;
+			}
+
+			if(physpos + 2 + i < 0)
+			{
+				printf("ERROR: physpos + 2 + i below zero (%d).", physpos + 2 + i);
+				return MODIO_ERR_BADSTRUCT;
+			}
+
+			dp:2("[MODIO:SESSION:%02d] Assigning data[%d] = modio_rStack[%d][%d];", session, i, session, physpos + 2 + i);
+
 			data[i] = modio_rStack[session][physpos + 2 + i];
+		}
 	}
 	else
 	{
