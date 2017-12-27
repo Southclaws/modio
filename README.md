@@ -18,13 +18,13 @@ This library is designed for modular gamemodes. Gamemodes that have a lot of dif
 Simply install to your project:
 
 ```bash
-sampctl package install Owner/library
+sampctl package install Southclaws/modio
 ```
 
 Include in your code and begin using the library:
 
 ```pawn
-#include <library>
+#include <modio>
 ```
 
 ## Usage
