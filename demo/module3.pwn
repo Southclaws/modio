@@ -1,21 +1,21 @@
 #include <YSI\y_hooks>
 
 
-hook OnFilterScriptInit()
+hook OnScriptInit()
 {
 	new data[2];
 
-	modio_read(FILE_STORAGE, !"MOD3", data);
+	modio_read(FILE_STORAGE, _T<M,O,D,3>, sizeof(data), data);
 
 	printf("Module 3 last run at %d with a tickcount of %d", data[0], data[1]);
 }
 
-hook OnFilterScriptExit()
+hook OnScriptExit()
 {
 	new data[2];
 	data[0] = gettime();
 	data[1] = GetTickCount();
-	modio_push(FILE_STORAGE, !"MOD3", sizeof(data), data);
+	modio_push(FILE_STORAGE, _T<M,O,D,3>, sizeof(data), data);
 }
 
 
@@ -27,7 +27,7 @@ hook OnRconCommand(cmd[])
 
 		data[0] = heapspace();
 
-		modio_push(FILE_RUNTIME, !"HEAP", 1, data);
+		modio_push(FILE_RUNTIME, _T<H,E,A,P>, 1, data);
 
 		return 1;
 	}
@@ -36,7 +36,7 @@ hook OnRconCommand(cmd[])
 	{
 		new data[1];
 
-		modio_read(FILE_RUNTIME, !"HEAP", data);
+		modio_read(FILE_RUNTIME, _T<H,E,A,P>, sizeof(data), data);
 
 		printf("HEAP: %d", data);
 

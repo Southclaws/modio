@@ -1,21 +1,21 @@
 #include <YSI\y_hooks>
 
 
-hook OnFilterScriptInit()
+hook OnScriptInit()
 {
 	new data[2];
 
-	modio_read(FILE_STORAGE, !"MOD1", data);
+	modio_read(FILE_STORAGE, _T<M,O,D,1>, sizeof(data), data);
 
 	printf("Module 1 last run at %d with a tickcount of %d", data[0], data[1]);
 }
 
-hook OnFilterScriptExit()
+hook OnScriptExit()
 {
 	new data[2];
 	data[0] = gettime();
 	data[1] = GetTickCount();
-	modio_push(FILE_STORAGE, !"MOD1", sizeof(data), data);
+	modio_push(FILE_STORAGE, _T<M,O,D,1>, sizeof(data), data);
 }
 
 
@@ -29,7 +29,7 @@ hook OnRconCommand(cmd[])
 
 		strmid(data, cmd, 5, strlen(cmd));
 
-		modio_push(FILE_RUNTIME, !"RCON", len, data);
+		modio_push(FILE_RUNTIME, _T<R,C,O,N>, len, data);
 
 		return 1;
 	}
@@ -38,7 +38,7 @@ hook OnRconCommand(cmd[])
 	{
 		new data[32];
 
-		modio_read(FILE_RUNTIME, !"RCON", data);
+		modio_read(FILE_RUNTIME, _T<R,C,O,N>, sizeof(data), data);
 
 		printf("RCON: %s", data);
 

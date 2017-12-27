@@ -1,21 +1,16 @@
-/*==============================================================================
+// built-in include guard removal
+// just in case the user has a local dependency with the same file name
+#if defined _inc_mathutil
+	#undef _inc_mathutil
+#endif
+// custom include-guard to ensure we don't duplicate
+#if defined _mathutil_included
+	#endinput
+#endif
+#define _mathutil_included
 
-
-	Southclaw's Modular Binary IO Library
-
-		v1.0.0
-
-		"modio" (modular IO) is a file reader/writer library for SA:MP that
-		takes advantage of fblockread and fblockwrite. Designed for modular
-		gamemodes with easy of writing in mind. A single function is required
-		to read and write to a single file from multiple scripts. All file
-		operations are performed once per file not once per function call.
-
-
-==============================================================================*/
-
-
-#include <YSI\y_hooks>
+#include <a_samp>
+#include <logger>
 
 
 #if !defined MODIO_FILE_STRUCTURE_VERSION
@@ -44,10 +39,6 @@
 	#define MAX_FILE_PATH (128)
 #endif
 
-#if !defined MODIO_SCRIPT_EXIT_FIX
-	#define MODIO_SCRIPT_EXIT_FIX (1)
-#endif
-
 #if !defined MODIO_WARN_ON_NO_TAG
 	#define MODIO_WARN_ON_NO_TAG (0)
 #endif
@@ -63,8 +54,7 @@
 #define dp:%0(%1) if(modio_debug>=%0)printf(%1)
 
 
-enum (+= -1)
-{
+enum (+= -1) {
 	MODIO_ERR_BADSESSION = -1,
 	MODIO_ERR_STKOVR,
 	MODIO_ERR_TAGUSED,
@@ -77,36 +67,35 @@ enum (+= -1)
 
 
 static
-		// Write session data
-		modio_wHeader			[MAX_MODIO_SESSION][MAX_MODIO_HEADER_SIZE],
-		modio_wHeaderIndex		[MAX_MODIO_SESSION],
-		modio_wSessionTags		[MAX_MODIO_SESSION][MAX_MODIO_TAGS],
-		modio_wSessionTagIndex	[MAX_MODIO_SESSION],
-		modio_wStack			[MAX_MODIO_SESSION][MAX_MODIO_STACK_SIZE],
-		modio_wStackIndex		[MAX_MODIO_SESSION],
-		modio_wSessionPath		[MAX_MODIO_SESSION][MAX_FILE_PATH],
-		modio_wActive			[MAX_MODIO_SESSION],
-		modio_wFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
-		modio_wSessions,
-		modio_wSessionLowest,
-		modio_wSessionHighest,
-		modio_wLastSession = -1,
-bool:	modio_wScriptExiting,
+	// Write session data
+	modio_wHeader			[MAX_MODIO_SESSION][MAX_MODIO_HEADER_SIZE],
+	modio_wHeaderIndex		[MAX_MODIO_SESSION],
+	modio_wSessionTags		[MAX_MODIO_SESSION][MAX_MODIO_TAGS],
+	modio_wSessionTagIndex	[MAX_MODIO_SESSION],
+	modio_wStack			[MAX_MODIO_SESSION][MAX_MODIO_STACK_SIZE],
+	modio_wStackIndex		[MAX_MODIO_SESSION],
+	modio_wSessionPath		[MAX_MODIO_SESSION][MAX_FILE_PATH],
+	modio_wActive			[MAX_MODIO_SESSION],
+	modio_wFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
+	modio_wSessions,
+	modio_wSessionLowest,
+	modio_wSessionHighest,
+	modio_wLastSession = -1,
+	bool:modio_wScriptExiting,
 
-		// Read session data
-		modio_rStack			[MAX_MODIO_SESSION][MAX_MODIO_STACK_SIZE],
-		modio_rStackIndex		[MAX_MODIO_SESSION],
-		modio_rSessionPath		[MAX_MODIO_SESSION][MAX_FILE_PATH],
-		modio_rActive			[MAX_MODIO_SESSION],
-		modio_rFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
-		modio_rSessions,
-		modio_rSessionLowest,
-		modio_rSessionHighest,
-		modio_rLastSession,
+	// Read session data
+	modio_rStack			[MAX_MODIO_SESSION][MAX_MODIO_STACK_SIZE],
+	modio_rStackIndex		[MAX_MODIO_SESSION],
+	modio_rSessionPath		[MAX_MODIO_SESSION][MAX_FILE_PATH],
+	modio_rActive			[MAX_MODIO_SESSION],
+	modio_rFinaliseTimer	[MAX_MODIO_SESSION] = {-1, ...},
+	modio_rSessions,
+	modio_rSessionLowest,
+	modio_rSessionHighest,
+	modio_rLastSession,
 
-		// Misc
-		modio_debug = MODIO_DEBUG;
-
+	// Misc
+	modio_debug = MODIO_DEBUG;
 
 forward __modio_finalise_write(session, close_session);
 forward __modio_finalise_read(session);
@@ -119,43 +108,36 @@ forward __modio_finalise_read(session);
 ==============================================================================*/
 
 
-stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = true, autowrite = true)
-{
+stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = true, autowrite = true) {
 	new session;
 
 	dp:1("[MODIO:PUSH] Pushing to file '%s' forcing write: %d forcing session close: %d", file, forcewrite, forceclose);
 
 	// Check if there are any sessions open
-	if(modio_wSessions > 0)
-	{
+	if(modio_wSessions > 0) {
 		// Check if this file is already in use
 		session = modio_getsession_write(file);
 
 		// If not, register a new session
-		if(session == -1)
-		{
+		if(session == -1) {
 			session = modio_register_write(file);
 			dp:2("[MODIO:SESSION:%02d] Registering new write session", session);
-		}
-		else
-		{
+		} else {
 			dp:2("[MODIO:SESSION:%02d] Pushing to existing write session", session);
 		}
-	}
-	else
-	{
+	} else {
 		// If no sessions are open, register a new one
 		session = modio_register_write(file);
 		dp:2("[MODIO:SESSION:%02d] Registering first write session", session);
 	}
 
-	if(session == -1)
+	if(session == -1) {
 		return MODIO_ERR_BADSESSION;
+	}
 
 	modio_wLastSession = session;
 
-	if(modio_wActive[session] == 0)
-	{
+	if(modio_wActive[session] == 0) {
 		dp:2("[MODIO:SESSION:%02d] Initializing modio stack push", session);
 		modio_wActive[session] = 1;
 
@@ -165,21 +147,17 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 	}
 
 	// Ensure the data doesn't violate the stack size
-	if(modio_wStackIndex[session] + length >= MAX_MODIO_STACK_SIZE - 1)
-	{
+	if(modio_wStackIndex[session] + length >= MAX_MODIO_STACK_SIZE - 1) {
 		printf("ERROR: Modio stack violation while trying to push %d cells (%d/%d)", length, modio_wStackIndex[session] + length, MAX_MODIO_STACK_SIZE);
 		return MODIO_ERR_STKOVR;
 	}
 
 	// Check if the tag has already been used
 	dp:4("[MODIO:SESSION:%02d] modio_wSessionTagIndex: %d", session, modio_wSessionTagIndex[session]);
-	if(modio_wSessionTagIndex[session] > 0)
-	{
-		for(new i; i < modio_wSessionTagIndex[session]; i++)
-		{
+	if(modio_wSessionTagIndex[session] > 0) {
+		for(new i; i < modio_wSessionTagIndex[session]; i++) {
 			dp:5("[MODIO:SESSION:%02d] Loop (%d/%d) comparing tags: %d == %d", session, i, modio_wSessionTagIndex[session], tag, modio_wSessionTags[session][i]);
-			if(tag == modio_wSessionTags[session][i])
-			{
+			if(tag == modio_wSessionTags[session][i]) {
 				printf("ERROR: Attempted to overwrite tag: '%d' in file '%s' for session %d", tag, file, session);
 				return MODIO_ERR_TAGUSED;
 			}
@@ -199,8 +177,7 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 
 	// Concatenate the data chunk
 	new i;
-	while(i < length)
-	{
+	while(i < length) {
 		modio_wStack[session][modio_wStackIndex[session]] = data[i];
 		modio_wStackIndex[session]++;
 		i++;
@@ -208,24 +185,20 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 
 	dp:1("[MODIO:SESSION:%02d] Pushing: %d cells under '%d' session: %d remaining: %d phys: %d tags: %d", session, length, tag, modio_wStackIndex[session], MAX_MODIO_STACK_SIZE - modio_wStackIndex[session], modio_wHeaderIndex[session] + modio_wStackIndex[session], modio_wSessionTagIndex[session]);
 
-	if(forcewrite)
-	{
+	if(forcewrite) {
 		dp:2("[MODIO:SESSION:%02d] Forcing write (forcewrite)", session);
 		modio_finalise_write(session, forceclose);
 		return 1;
 	}
 
-	if(modio_wScriptExiting)
-	{
+	if(modio_wScriptExiting) {
 		dp:2("[MODIO:SESSION:%02d] Forcing write (modio_wScriptExiting)", session);
 		modio_finalise_write(session, 0);
 		return 1;
 	}
 
-	if(autowrite)
-	{
-		if(modio_wFinaliseTimer[session] == -1)
-		{
+	if(autowrite) {
+		if(modio_wFinaliseTimer[session] == -1) {
 			dp:2("[MODIO:SESSION:%02d] Setting timer", session);
 			modio_wFinaliseTimer[session] = SetTimerEx("__modio_finalise_write", 50, 0, "dd", session, forceclose);
 		}
@@ -234,10 +207,8 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 	return 1;
 }
 
-stock modio_register_write(file[])
-{
-	if(modio_wSessions == MAX_MODIO_SESSION)
-	{
+stock modio_register_write(file[]) {
+	if(modio_wSessions == MAX_MODIO_SESSION) {
 		printf("ERROR: modio_wSessions has reached limit of %d, please increase MAX_MODIO_SESSION.", MAX_MODIO_SESSION);
 		return -1;
 	}
@@ -245,11 +216,9 @@ stock modio_register_write(file[])
 	new session = -1;
 
 	// Clumsy way of finding the next inactive session
-	for(new i; i <= modio_wSessionHighest + 1; i++)
-	{
+	for(new i; i <= modio_wSessionHighest + 1; i++) {
 		dp:5("[MODIO:REGISTER:WRITE] Searching for next inactive session. Current: %d highest: %d", i, modio_wSessionHighest);
-		if(!modio_wActive[i])
-		{
+		if(!modio_wActive[i]) {
 			session = i;
 			break;
 		}
@@ -261,11 +230,11 @@ stock modio_register_write(file[])
 	modio_wSessionPath[session][0] = EOS;
 	strcat(modio_wSessionPath[session], file);
 
-	if(session > modio_wSessionHighest)
+	if(session > modio_wSessionHighest) {
 		modio_wSessionHighest = session;
-
-	else if(session < modio_wSessionLowest)
+	} else if(session < modio_wSessionLowest) {
 		modio_wSessionLowest = session;
+	}
 
 	modio_wSessions++;
 
@@ -305,74 +274,41 @@ stock modio_getsession_write(file[])
 	return -1;
 }
 
-#if MODIO_SCRIPT_EXIT_FIX == 1
-
-	#if defined FILTERSCRIPT
-
-		hook OnFilterScriptExit()
-		{
-			dp:1("[MODIO:HOOK] OnFilterScriptExit");
-
-			modio_wScriptExiting = true;
-
-			return 1;
-		}
-	/*
-		public OnFilterScriptExit()
-		{
-			dp:1("[MODIO:HOOK] OnFilterScriptExit");
-
-			#if defined modio_OnFilterScriptExit
-				return modio_OnFilterScriptExit();
-			#else
-				return 1;
-			#endif
-		}
-		#if defined _ALS_OnFilterScriptExit
-			#undef OnFilterScriptExit
-		#else
-			#define _ALS_OnFilterScriptExit
-		#endif
-		 
-		#define OnFilterScriptExit modio_OnFilterScriptExit
-		#if defined modio_OnFilterScriptExit
-			forward modio_OnFilterScriptExit();
-		#endif
-	*/
+public OnFilterScriptExit() {
+	modio_wScriptExiting = true;
+	#if defined modio_OnFilterScriptExit
+		return modio_OnFilterScriptExit();
 	#else
-
-		hook OnGameModeExit()
-		{
-			dp:1("[MODIO:HOOK] OnGameModeExit");
-
-			modio_wScriptExiting = true;
-
-			return 1;
-		}
-	/*
-		public OnGameModeExit()
-		{
-			dp:1("[MODIO:HOOK] OnGameModeExit");
-
-			#if defined modio_OnGameModeExit
-				return modio_OnGameModeExit();
-			#else
-				return 1;
-			#endif
-		}
-		#if defined _ALS_OnGameModeExit
-			#undef OnGameModeExit
-		#else
-			#define _ALS_OnGameModeExit
-		#endif
-		 
-		#define OnGameModeExit modio_OnGameModeExit
-		#if defined modio_OnGameModeExit
-			forward modio_OnGameModeExit();
-		#endif
-	*/
+		return 1;
 	#endif
+}
+#if defined _ALS_OnFilterScriptExit
+	#undef OnFilterScriptExit
+#else
+	#define _ALS_OnFilterScriptExit
+#endif
+#define OnFilterScriptExit modio_OnFilterScriptExit
+#if defined modio_OnFilterScriptExit
+	forward modio_OnFilterScriptExit();
+#endif
 
+public OnGameModeExit()
+{
+	modio_wScriptExiting = true;
+	#if defined modio_OnGameModeExit
+		return modio_OnGameModeExit();
+	#else
+		return 1;
+	#endif
+}
+#if defined _ALS_OnGameModeExit
+	#undef OnGameModeExit
+#else
+	#define _ALS_OnGameModeExit
+#endif
+#define OnGameModeExit modio_OnGameModeExit
+#if defined modio_OnGameModeExit
+	forward modio_OnGameModeExit();
 #endif
 
 public __modio_finalise_write(session, close_session)

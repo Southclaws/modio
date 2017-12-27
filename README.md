@@ -1,4 +1,4 @@
-# What is modio?
+# modio.inc
 
 "modio" (modular IO) is a file reader/writer library for SA:MP that takes advantage of fblockread and fblockwrite.
 
@@ -13,16 +13,29 @@ Hopefully that analogy hooked your interest in this library!
 
 This library is designed for modular gamemodes. Gamemodes that have a lot of different parts that must save to a single file. I wrote it with y_hooks/ALS in mind. For example: calling the modio write function to save player data in 10 OnPlayerDisconnect hooks will all save to the file using a single write operation, pretty cool huh?
 
-# Example of Use
+## Installation
 
-*module #1*
-```cpp
+Simply install to your project:
+
+```bash
+sampctl package install Owner/library
+```
+
+Include in your code and begin using the library:
+
+```pawn
+#include <library>
+```
+
+## Usage
+
+Code in _module #1_:
+
+```pawn
 static
     mod1_Data[MAX_PLAYERS][10]; // 10 cells are stored with each player
 
-
-hook OnPlayerConnect(playerid)
-{
+hook OnPlayerConnect(playerid) {
     new
         name[MAX_PLAYER_NAME],
         filename[35];
@@ -35,8 +48,7 @@ hook OnPlayerConnect(playerid)
     return 1;
 }
 
-hook OnPlayerDisconnect(playerid, reason)
-{
+hook OnPlayerDisconnect(playerid, reason) {
     new
         name[MAX_PLAYER_NAME],
         filename[35];
@@ -50,14 +62,13 @@ hook OnPlayerDisconnect(playerid, reason)
 }
 ```
 
-*module #2*
-```cpp
+Code in _module #2_:
+
+```pawn
 static
     mod2_Data[MAX_PLAYERS][64]; // 64 cells are stored with each player
 
-
-hook OnPlayerConnect(playerid)
-{
+hook OnPlayerConnect(playerid) {
     new
         name[MAX_PLAYER_NAME],
         filename[35];
@@ -70,8 +81,7 @@ hook OnPlayerConnect(playerid)
     return 1;
 }
 
-hook OnPlayerDisconnect(playerid, reason)
-{
+hook OnPlayerDisconnect(playerid, reason) {
     new
         name[MAX_PLAYER_NAME],
         filename[35];
@@ -89,17 +99,16 @@ Here we can see two different scripts hooking OnPlayerConnect and OnPlayerDiscon
 
 The process is exactly the same for reading, one simple function call in each hook.
 
+## How it works
 
-# How it works
-
-Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named (that's what the _T&lt;M,O,D,1&gt; and _T&lt;M,O,D,2&gt; things were. The weird syntax packs the characters into a single cell.)
+Each piece of data is tagged with a 4 character (32 bit) cell so sections of data from different scripts can be named - that's what the `_T<M,O,D,1>` and `_T<M,O,D,2>` things were. The weird syntax packs the characters into a single cell.
 
 The data is stored in a partially non-order-dependent structure since the hook order is usually indeterminate anyway so the tags are used to search for data.
 
-This is what a modio file looks like:
-(Actual files are binary, this just represents the structure.)
-```
-cell            bytes
+This is what modio's binary structure looks like:
+
+```text
+cell            size in bytes
 
 HEADER
 filever         4
@@ -118,53 +127,52 @@ tagbody         numtags * (n tagsize)
     tagsize     4
     tagdata     tagsize * 4
 ]
-
 ```
+
 I'll go through each section and explain it:
 
 ### Header
 
-- filever (1 cell)
+* filever (1 cell)
   A single number which identifies which version of modio is required to read the file.
 
-- numbyte (1 cell)
+* numbyte (1 cell)
   The size of the header and body in cells (4 bytes per cell).
 
-- numtags (1 cell)
+* numtags (1 cell)
   The number of tags/data sections in the file.
 
-- taglist (numtags * 2 cells)
+* taglist (numtags x 2 cells)
   A list of tags in the file; each item in this list has two elements:
-  - tagname (1 cell)
+  * tagname (1 cell)
     The 4 character tag name
-  - physpos (1 cell)
+  * physpos (1 cell)
     The physical position of the actual data block (offset from first body cell. First tag always has a physpos of 0)
-
 
 ### Body
 
-- data block
-  - tagname (1 cell)
+* data block
+
+  * tagname (1 cell)
     The 4 character tag name
-  - tagsize (1 cell)
+  * tagsize (1 cell)
     The amount of cells stored in the block (not including these first two cells)
-  - tagdata (tagsize cells)
+  * tagdata (tagsize cells)
     The actual data
 
+## Known Issues
 
-# Development
+* `modio_push` in `OnGameModeExit` on gamemode restarts/exits
+  * Since the write function uses a very short timer to perform a single write after all of the `modio_push` calls are done, calling it on `OnGameModeExit` means the timer is never called since the script stops completely after this callback. The current fix for this is to just write the entire file each time `modio_push` is called.
+* `modio_push` in `OnPlayerDisconnect` on gamemode restarts/exits
+  * Saving data on `OnPlayerDisconnect` is also problematic when restarting or exiting the gamemode. The fix for this is manual unfortunately: the user must write a loop in `OnGameModeExit` that calls `modio_finalise_write` for each user file being written to.
 
-This is still in very early development and can be improved upon a lot.
-There is a demo gamemode available in my repository that examples this and some SIF features in a modular structure.
+## Testing
 
-- modgm: [https://github.com/Southclaw/modgm-demo ![http://i.imgur.com/l7gBY92.png](http://i.imgur.com/l7gBY92.png)](https://github.com/Southclaw/modgm-demo)
+To test, simply run the package:
 
+```bash
+sampctl package run
+```
 
-# Known Issues
-
-- modio_push in OnGameModeExit on gamemode restarts/exits
-  Since the write function uses a very short timer to perform a single write after all of the modio_push calls are done, calling it on OnGameModeExit means the timer is never called since the script stops completely after this callback. The current fix for this is to just write the entire file each time modio_push is called.
-
-
-- modio_push in OnPlayerDisconnect on gamemode restarts/exits
-  Saving data on OnPlayerDisconnect is also problematic when restarting or exiting the gamemode. The fix for this is manual unfortunately: the user must write a loop in OnGameModeExit that calls modio_finalise_write for each user file being written to.
+And connect to `localhost:7777` to test.
