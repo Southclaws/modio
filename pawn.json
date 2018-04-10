@@ -1,14 +1,8 @@
 {
-	"user": "Southclaws",
-	"repo": "modio",
-	"entry": "demo.pwn",
-	"output": "demo.amx",
-	"dependencies": [
-		"Southclaws/samp-stdlib",
-		"Southclaws/samp-logger"
-	],
-	"dev_dependencies": [
-		"Zeex/amx_assembly",
-		"Misiur/YSI-Includes"
-	]
+  "user": "Southclaws",
+  "repo": "modio",
+  "entry": "demo.pwn",
+  "output": "demo.amx",
+  "dependencies": ["Southclaws/samp-stdlib", "Southclaws/samp-logger"],
+  "dev_dependencies": ["pawn-lang/YSI-Includes"]
 }
