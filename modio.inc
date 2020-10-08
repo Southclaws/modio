@@ -108,7 +108,7 @@ forward __modio_finalise_read(session);
 ==============================================================================*/
 
 
-stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = true, autowrite = true) {
+stock modio_push(const file[], tag, length, const data[], forcewrite = false, forceclose = true, autowrite = true) {
 	new session;
 
 	dp:1("[MODIO:PUSH] Pushing to file '%s' forcing write: %d forcing session close: %d", file, forcewrite, forceclose);
@@ -207,7 +207,7 @@ stock modio_push(file[], tag, length, data[], forcewrite = false, forceclose = t
 	return 1;
 }
 
-stock modio_register_write(file[]) {
+stock modio_register_write(const file[]) {
 	if(modio_wSessions == MAX_MODIO_SESSION) {
 		printf("ERROR: modio_wSessions has reached limit of %d, please increase MAX_MODIO_SESSION.", MAX_MODIO_SESSION);
 		return -1;
@@ -241,7 +241,7 @@ stock modio_register_write(file[]) {
 	return session;
 }
 
-stock modio_getsession_write(file[])
+stock modio_getsession_write(const file[])
 {
 	dp:2("[MODIO:GETSESSION:WRITE] Getting session ID for '%s'.", file);
 
@@ -655,7 +655,7 @@ modio_finalise_read(session)
 	modio_rSessions--;
 }
 
-stock modio_register_read(file[])
+stock modio_register_read(const file[])
 {
 	dp:1("[MODIO:SESSION:%02d] Registering new session.", modio_rSessions);
 

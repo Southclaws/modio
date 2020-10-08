@@ -12,6 +12,6 @@
 #include "demo/module4.pwn"
 
 main() {
-	log("Demo initialising");
+	Logger_Log("Demo initialising");
 	return 1;
 }
