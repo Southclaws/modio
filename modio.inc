@@ -457,7 +457,7 @@ stock modio_close_session_write(session)
 ==============================================================================*/
 
 
-stock modio_read(file[], tag, length, data[], forceclose = false, autoclose = true)
+stock modio_read(const file[], tag, length, data[], forceclose = false, autoclose = true)
 {
 	if(!fexist(file))
 		return MODIO_ERR_NOFILE;
@@ -695,7 +695,7 @@ stock modio_register_read(const file[])
 	return session;
 }
 
-stock modio_getsession_read(file[])
+stock modio_getsession_read(const file[])
 {
 	dp:1("[MODIO:GETSESSION:READ] Finding session ID for '%s'.", file);
 
