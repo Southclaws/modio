@@ -200,7 +200,7 @@ stock modio_push(const file[], tag, length, const data[], forcewrite = false, fo
 	if(autowrite) {
 		if(modio_wFinaliseTimer[session] == -1) {
 			dp:2("[MODIO:SESSION:%02d] Setting timer", session);
-			modio_wFinaliseTimer[session] = SetTimerEx("__modio_finalise_write", 50, 0, "dd", session, forceclose);
+			modio_wFinaliseTimer[session] = SetTimerEx("__modio_finalise_write", 50, false, "dd", session, forceclose);
 		}
 	}
 
@@ -607,7 +607,7 @@ stock modio_read(const file[], tag, length, data[], forceclose = false, autoclos
 	{
 		// Close the session after any other reads
 		if(modio_rFinaliseTimer[session] == -1)
-			modio_rFinaliseTimer[session] = SetTimerEx("__modio_finalise_read", 50, 0, "d", session);
+			modio_rFinaliseTimer[session] = SetTimerEx("__modio_finalise_read", 50, false, "d", session);
 	}
 
 	// Return the amount of cells read
